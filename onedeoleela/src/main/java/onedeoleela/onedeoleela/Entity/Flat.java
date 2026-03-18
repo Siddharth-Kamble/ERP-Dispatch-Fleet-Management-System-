@@ -1,5 +1,6 @@
 package onedeoleela.onedeoleela.Entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,9 +14,10 @@ public class Flat {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long flatId;
 
-    private Integer flatNumber;
+    private String flatNumber; // e.g., FLAT1001
 
     @ManyToOne
     @JoinColumn(name = "floor_id")
+    @JsonBackReference
     private Floor floor;
 }

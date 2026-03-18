@@ -31,4 +31,9 @@ public class ProjectLogController {
     public List<ProjectLog> getLogsByTrip(@PathVariable Long tripId){
         return projectLogService.getLogsByTrip(tripId);
     }
+
+    @GetMapping("/project/{projectName}")
+    public List<ProjectLog> getLogsByProjectName(@PathVariable String projectName){
+        return projectLogService.getLogsByProjectName(projectName);
+    }
 }

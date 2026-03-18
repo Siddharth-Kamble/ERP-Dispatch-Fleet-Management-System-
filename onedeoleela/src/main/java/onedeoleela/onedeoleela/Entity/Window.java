@@ -46,14 +46,16 @@ public class Window {
 
     private String remark;
 
-    private Integer floor;
 
-    private Integer flatNumber;   // added flat number column in windows table
+
+//    private Integer flatNumber;   // added flat number column in windows table
 
     @ManyToOne
     @JoinColumn(name = "flat_id")
     private Flat flat;
-
+    @ManyToOne
+    @JoinColumn(name = "floor_id")
+    private Floor floor;
     @ManyToOne
     @JoinColumn(name = "trip_id")
     private Trip trip;

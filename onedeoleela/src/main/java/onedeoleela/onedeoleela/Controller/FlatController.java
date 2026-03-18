@@ -1,6 +1,7 @@
 package onedeoleela.onedeoleela.Controller;
 
 import onedeoleela.onedeoleela.Entity.Flat;
+import onedeoleela.onedeoleela.Repository.FlatRepository;
 import onedeoleela.onedeoleela.Service.FlatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -36,7 +37,7 @@ public class FlatController {
 
     // Get Flat by Flat Number
     @GetMapping("/number/{flatNumber}")
-    public Flat getFlatByNumber(@PathVariable Integer flatNumber) {
+    public Flat getFlatByNumber(@PathVariable String flatNumber) {
         return flatService.getFlatByNumber(flatNumber);
     }
 
@@ -46,4 +47,10 @@ public class FlatController {
         flatService.deleteFlat(id);
         return "Flat deleted successfully";
     }
+    // Get all flats by floor ID
+    @GetMapping("/floor/{floorId}")
+    public List<Flat> getFlatsByFloor(@PathVariable Long floorId) {
+        return flatService.getFlatsByFloorId(floorId);
+    }
+
 }

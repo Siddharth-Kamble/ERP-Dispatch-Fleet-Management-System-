@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
+
 @Entity
 @Getter
 @Setter
@@ -17,10 +19,16 @@ public class Floor {
 
     private Integer floorNumber;
 
+    private Integer totalFlats;
+
     @ManyToOne
     @JoinColumn(name = "project_id")
     @JsonIgnore
     private Project project;
+
+    @OneToMany(mappedBy = "floor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<Flat> flats;
 
     @JsonProperty("projectId")
     public Long getProjectId() {

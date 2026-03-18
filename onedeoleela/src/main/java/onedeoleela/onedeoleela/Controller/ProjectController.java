@@ -1,49 +1,67 @@
-package onedeoleela.onedeoleela.Controller;
+    package onedeoleela.onedeoleela.Controller;
 
-import onedeoleela.onedeoleela.Entity.Project;
-import onedeoleela.onedeoleela.Service.ProjectService;
-import org.springframework.web.bind.annotation.*;
+    import onedeoleela.onedeoleela.Entity.Project;
+    import onedeoleela.onedeoleela.Service.ProjectService;
+    import org.springframework.http.ResponseEntity;
+    import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+    import java.util.List;
+    import java.util.Optional;
 
-@RestController
-@RequestMapping("/projects")
-public class ProjectController {
+    @RestController
+    @RequestMapping("/projects")
+    @CrossOrigin(origins = "http://localhost:3000") // Allow frontend access
+    public class ProjectController {
 
-    private final ProjectService projectService;
+        private final ProjectService projectService;
 
-    public ProjectController(ProjectService projectService) {
-        this.projectService = projectService;
+        public ProjectController(ProjectService projectService) {
+            this.projectService = projectService;
+        }
+
+        // Create Project
+        @PostMapping
+        public ResponseEntity<Project> createProject(@RequestBody Project project) {
+            Project createdProject = projectService.createProject(project);
+            return ResponseEntity.ok(createdProject);
+        }
+
+        // Get All Projects
+        @GetMapping
+        public ResponseEntity<List<Project>> getAllProjects() {
+            List<Project> projects = projectService.getAllProjects();
+            return ResponseEntity.ok(projects);
+        }
+
+        // Get Project By Id
+        @GetMapping("/{id}")
+        public ResponseEntity<Project> getProjectById(@PathVariable Long id) {
+            Optional<Project> project = projectService.getProjectById(id);
+            return project.map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        }
+
+        // Update Project
+        @PutMapping("/{id}")
+        public ResponseEntity<Project> updateProject(@PathVariable Long id, @RequestBody Project project) {
+            Project updatedProject = projectService.updateProject(id, project);
+            return ResponseEntity.ok(updatedProject);
+        }
+
+        // Delete Project
+        @DeleteMapping("/{id}")
+        public ResponseEntity<Void> deleteProject(@PathVariable Long id) {
+            projectService.deleteProject(id);
+            return ResponseEntity.noContent().build();
+        }
+
+        // -----------------------------
+        // New Endpoint for WindowManager frontend
+        // Fetch project details by project name
+        @GetMapping("/by-name/{projectName}")
+        public ResponseEntity<Project> getProjectByName(@PathVariable String projectName) {
+            Optional<Project> project = projectService.getProjectByName(projectName);
+            return project.map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        }
     }
-
-    // Create Project
-    @PostMapping
-    public Project createProject(@RequestBody Project project) {
-        return projectService.createProject(project);
-    }
-
-    // Get All Projects
-    @GetMapping
-    public List<Project> getAllProjects() {
-        return projectService.getAllProjects();
-    }
-
-    // Get Project By Id
-    @GetMapping("/{id}")
-    public Optional<Project> getProjectById(@PathVariable Long id) {
-        return projectService.getProjectById(id);
-    }
-
-    // Update Project
-    @PutMapping("/{id}")
-    public Project updateProject(@PathVariable Long id, @RequestBody Project project) {
-        return projectService.updateProject(id, project);
-    }
-
-    // Delete Project
-    @DeleteMapping("/{id}")
-    public void deleteProject(@PathVariable Long id) {
-        projectService.deleteProject(id);
-    }
-}

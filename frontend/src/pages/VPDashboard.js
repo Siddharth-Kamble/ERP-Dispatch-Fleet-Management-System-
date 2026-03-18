@@ -3,24 +3,14 @@ import NewProjectModal from "../components/NewProjectModal";
 import { createProject, getProjects } from "../services/projectService";
 
 const VPDashboard = () => {
-    // =========================
-    // STATE
-    // =========================
+
     const [openNewProject, setOpenNewProject] = useState(false);
     const [projects, setProjects] = useState([]);
     const [successMessage, setSuccessMessage] = useState("");
 
-    // ⚠️ Later this should come from login/auth
     const loggedInVpName = "Siddharth Kamble";
 
-    // =========================
-    // SAMPLE DASHBOARD DATA
-    // =========================
 
-
-    // =========================
-    // LOAD PROJECTS
-    // =========================
     const loadProjects = async () => {
         try {
             const res = await getProjects();
@@ -34,9 +24,6 @@ const VPDashboard = () => {
         loadProjects();
     }, []);
 
-    // =========================
-    // CREATE PROJECT
-    // =========================
     const handleCreateProject = async (data) => {
         try {
             const formData = new FormData();
@@ -86,8 +73,7 @@ const VPDashboard = () => {
             });
         }
 
-        // As per your requirement:
-        // Only current month orders from DB
+
         result[0].orders = projects.length;
 
         return result;
@@ -117,7 +103,6 @@ const VPDashboard = () => {
                 </button>
             </div>
 
-            {/* ✅ Success Message */}
             {successMessage && (
                 <div
                     style={{

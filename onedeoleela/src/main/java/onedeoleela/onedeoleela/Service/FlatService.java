@@ -37,12 +37,17 @@ public class FlatService {
                 .orElseThrow(() -> new RuntimeException("Flat not found"));
     }
 
-    public Flat getFlatByNumber(Integer flatNumber) {
+    public Flat getFlatByNumber(String flatNumber) {
         return flatRepository.findByFlatNumber(flatNumber)
                 .orElseThrow(() -> new RuntimeException("Flat not found"));
     }
 
     public void deleteFlat(Long id) {
         flatRepository.deleteById(id);
+    }
+    public List<Flat> getFlatsByFloorId(Long floorId) {
+        return flatRepository.findAll().stream()
+                .filter(flat -> flat.getFloor() != null && flat.getFloor().getFloorId().equals(floorId))
+                .toList();
     }
 }
