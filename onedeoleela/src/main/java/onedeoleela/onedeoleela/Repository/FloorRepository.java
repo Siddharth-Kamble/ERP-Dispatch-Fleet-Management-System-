@@ -15,4 +15,5 @@ public interface FloorRepository extends JpaRepository<Floor, Long> {
     List<Floor> findByProject_ProjectId(Long projectId);
     @Query("SELECT MAX(f.floorNumber) FROM Floor f WHERE f.project.projectId = :projectId")
     Integer findMaxFloorNumberByProjectId(@Param("projectId") Long projectId);
+    Optional<Floor> findByFloorNumberAndProject_ProjectId(Integer floorNumber, Long projectId);
 }

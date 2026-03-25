@@ -51,6 +51,7 @@ import onedeoleela.onedeoleela.Entity.Window;
 import onedeoleela.onedeoleela.Service.WindowService;
 
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -92,5 +93,14 @@ public class WindowController {
     @GetMapping("/trip/{tripId}/windows")
     public List<Window> getWindowsByTrip(@PathVariable Long tripId) {
         return windowService.getWindowsByTrip(tripId);
+    }
+
+    @PostMapping("/trip/{tripId}/bulk-upload")
+    public String bulkUpload(
+            @PathVariable Long tripId,
+            @RequestParam("projectId") Long projectId,
+            @RequestParam("file") MultipartFile file) {
+
+        return windowService.bulkUpload(file, tripId, projectId);
     }
 }
