@@ -84,29 +84,69 @@ public class WindowService {
         catch (NumberFormatException e) { return 0; }
     }
 
+//    public Window createWindow(Long tripId, String flatNumber, Long floorId, Window window) {
+//
+//        Trip trip = tripRepository.findById(tripId)
+//                .orElseThrow(() ->
+//                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip not found")
+//                );
+//
+//        Flat flat = flatRepository.findByFlatNumber(flatNumber)
+//                .orElseThrow(() ->
+//                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Flat not found")
+//                );
+//
+//        window.setTrip(trip);
+//        window.setFlat(flat);
+//
+//        if (floorId != null) {
+//            Floor floor = floorRepository.findById(floorId)
+//                    .orElseThrow(() ->
+//                            new ResponseStatusException(HttpStatus.BAD_REQUEST, "Floor not found")
+//                    );
+//            window.setFloor(floor);
+//        }
+//
+//        return windowRepository.save(window);
+//    }
+
+
+
     public Window createWindow(Long tripId, String flatNumber, Long floorId, Window window) {
 
+        // 1️⃣ Fetch the Trip
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip not found")
                 );
 
-        Flat flat = flatRepository.findByFlatNumber(flatNumber)
+        // 2️⃣ Floor must be provided to uniquely identify the flat
+        if (floorId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "FloorId is required to identify the flat");
+        }
+
+        Floor floor = floorRepository.findById(floorId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Floor not found")
+                );
+
+        // 3️⃣ Fetch the Flat using flatNumber + floorId
+        Flat flat = flatRepository.findByFlatNumberAndFloor_FloorId(flatNumber, floorId)
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.BAD_REQUEST, "Flat not found")
                 );
 
+        // 4️⃣ Set relations
         window.setTrip(trip);
+        window.setFloor(floor);
         window.setFlat(flat);
 
-        if (floorId != null) {
-            Floor floor = floorRepository.findById(floorId)
-                    .orElseThrow(() ->
-                            new ResponseStatusException(HttpStatus.BAD_REQUEST, "Floor not found")
-                    );
-            window.setFloor(floor);
-        }
+        // 5️⃣ Set technical specs (optional: ensure null safety)
+        if (window.getBottomFix() == null) window.setBottomFix(0);
+        if (window.getGlassShutter() == null) window.setGlassShutter(0);
+        if (window.getMeshShutter() == null) window.setMeshShutter(0);
 
+        // 6️⃣ Save the Window
         return windowRepository.save(window);
     }
     public List<Window> getWindowsByTrip(Long tripId) {
@@ -120,32 +160,34 @@ public class WindowService {
     public String bulkUpload(MultipartFile file, Long tripId, Long projectId) {
 
         try {
+            // 1️⃣ Fetch the Trip
             Trip trip = tripRepository.findById(tripId)
                     .orElseThrow(() -> new RuntimeException("Trip not found"));
 
+            // 2️⃣ Open Excel workbook
             Workbook workbook = new XSSFWorkbook(file.getInputStream());
             Sheet sheet = workbook.getSheetAt(0);
 
+            // 3️⃣ Iterate rows (skip header)
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-
                 Row row = sheet.getRow(i);
                 if (row == null) continue;
 
+                // 4️⃣ Get Flat Number
                 String flatNumber = getString(row.getCell(2));
                 if (flatNumber.isEmpty()) continue;
 
-                // STEP 1: Extract floor
+                // 5️⃣ Extract Floor
                 Integer floorNumber = extractFloorNumber(flatNumber);
 
-                // STEP 2: Get/Create Floor
+                // 6️⃣ Get or create Floor
                 Floor floor = getOrCreateFloor(floorNumber, projectId);
 
-                // STEP 3: Get/Create Flat
+                // 7️⃣ Get or create Flat
                 Flat flat = getOrCreateFlat(flatNumber, floor);
 
-                // STEP 4: Create Window
+                // 8️⃣ Create Window object
                 Window window = new Window();
-
                 window.setWindowSeriesNumber(getString(row.getCell(1)));
                 window.setLocation(getString(row.getCell(3)));
                 window.setWCodeNo(getString(row.getCell(4)));
@@ -153,22 +195,25 @@ public class WindowService {
                 window.setSeries(getString(row.getCell(6)));
                 window.setDescription(getString(row.getCell(7)));
 
+                // 9️⃣ Set dimensions
                 window.setWidth(getDouble(row.getCell(8)));
                 window.setHeight(getDouble(row.getCell(9)));
 
-                Double trackOuterVal = getDouble(row.getCell(10));
-                window.setTrackOuter(trackOuterVal != null ? trackOuterVal.intValue() : 0);
+                // 10️⃣ Set technical specs
+                window.setTrackOuter(getInteger(row.getCell(10)));       // Track Outer
+                window.setBottomFix(getInteger(row.getCell(11)));       // Bottom Fix ✅
+                window.setGlassShutter(getInteger(row.getCell(12)));    // Glass Shutter ✅
+                window.setMeshShutter(getInteger(row.getCell(13)));     // Mesh Shutter ✅
+                window.setUnits(getInteger(row.getCell(14)));           // Units
+                window.setSqft(getDouble(row.getCell(15)));             // SqFt
+                window.setRemark(getString(row.getCell(16)));           // Remark
 
-                Double unitsVal = getDouble(row.getCell(11));
-                window.setUnits(unitsVal != null ? unitsVal.intValue() : 0);
-
-                window.setSqft(getDouble(row.getCell(12)));
-                window.setRemark(getString(row.getCell(13)));
-
+                // 11️⃣ Set relations
                 window.setTrip(trip);
                 window.setFlat(flat);
                 window.setFloor(floor);
 
+                // 12️⃣ Save window
                 windowRepository.save(window);
             }
 
@@ -219,5 +264,39 @@ public class WindowService {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    public Window updateWindow(Long windowId, Window updatedWindow) {
+        // 1️⃣ Fetch existing window
+        Window existingWindow = windowRepository.findById(windowId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Window not found"));
+
+        // 2️⃣ Update technical details
+        existingWindow.setWindowSeriesNumber(updatedWindow.getWindowSeriesNumber());
+        existingWindow.setLocation(updatedWindow.getLocation());
+        existingWindow.setWCodeNo(updatedWindow.getWCodeNo());
+        existingWindow.setJobCardNo(updatedWindow.getJobCardNo());
+        existingWindow.setSeries(updatedWindow.getSeries());
+        existingWindow.setDescription(updatedWindow.getDescription());
+        existingWindow.setWidth(updatedWindow.getWidth());
+        existingWindow.setHeight(updatedWindow.getHeight());
+        existingWindow.setTrackOuter(updatedWindow.getTrackOuter());
+        existingWindow.setBottomFix(updatedWindow.getBottomFix() != null ? updatedWindow.getBottomFix() : 0);
+        existingWindow.setGlassShutter(updatedWindow.getGlassShutter() != null ? updatedWindow.getGlassShutter() : 0);
+        existingWindow.setMeshShutter(updatedWindow.getMeshShutter() != null ? updatedWindow.getMeshShutter() : 0);
+        existingWindow.setUnits(updatedWindow.getUnits());
+        existingWindow.setSqft(updatedWindow.getSqft());
+        existingWindow.setRemark(updatedWindow.getRemark());
+
+        // 3️⃣ Optionally update Flat/Floor relationships
+        if (updatedWindow.getFlat() != null) {
+            existingWindow.setFlat(updatedWindow.getFlat());
+        }
+        if (updatedWindow.getFloor() != null) {
+            existingWindow.setFloor(updatedWindow.getFloor());
+        }
+
+        // 4️⃣ Save and return
+        return windowRepository.save(existingWindow);
     }
 }

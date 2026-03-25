@@ -103,4 +103,12 @@ public class WindowController {
 
         return windowService.bulkUpload(file, tripId, projectId);
     }
+
+    @PutMapping("/{windowId}")
+    public Window updateWindow(
+            @PathVariable Long windowId,
+            @RequestBody Window updatedWindow
+    ) {
+        return windowService.updateWindow(windowId, updatedWindow);
+    }
 }

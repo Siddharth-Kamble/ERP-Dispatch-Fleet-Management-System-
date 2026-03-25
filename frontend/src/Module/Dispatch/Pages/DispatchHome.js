@@ -15,7 +15,8 @@ import {
     FaPlusCircle,
     FaListAlt,
     FaTachometerAlt,
-    FaWindowMaximize
+    FaWindowMaximize,
+    FaUpload
 } from "react-icons/fa";
 
 function DispatchHome() {
@@ -151,6 +152,12 @@ function DispatchHome() {
             color: "#0ea5e9",
             onClick: () => navigate("/dispatch-dashboard/window-dc"),
         },
+           {
+                title: "Advanced Bulk DC",
+                icon: <FaUpload />,
+                color: "#9333ea",
+                onClick: () => navigate("/dispatch-dashboard/bulk-upload-window"),
+            },
     ];
 
     const requisitionCards = [
