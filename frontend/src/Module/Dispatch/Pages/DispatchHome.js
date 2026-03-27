@@ -158,6 +158,12 @@ function DispatchHome() {
                 color: "#9333ea",
                 onClick: () => navigate("/dispatch-dashboard/bulk-upload-window"),
             },
+                {
+                    title: "Material DC",
+                    icon: <FaPlusCircle />, // you can choose any icon you like
+                    color: "#f97316",       // pick a new color
+                    onClick: () => navigate("/dispatch-dashboard/material-dc"), // new route
+                },
     ];
 
     const requisitionCards = [
@@ -213,6 +219,15 @@ function DispatchHome() {
                 icon: <FaBars />, // You can change this to FaGlobe if you import it
                 color: "#059669",
                 onClick: () => navigate("/dispatch-dashboard/vehicle-portal"),
+            },
+        ];
+
+        const reportCards = [
+            {
+                title: "Dispatch Report",
+                icon: <FaListAlt />,
+                color: "#2563eb",
+                onClick: () => navigate("/dispatch-dashboard/dispatch-report"),
             },
         ];
 
@@ -291,6 +306,7 @@ function DispatchHome() {
 
                             <Section title="Vehicle Monitoring" cards={healthCards} />
                             <Section title="Vehicle Portal Management" cards={portalCards} />
+                            <Section title="Reports" cards={reportCards} />
 
                         </div>
                     ) : (

@@ -84,31 +84,7 @@ public class WindowService {
         catch (NumberFormatException e) { return 0; }
     }
 
-//    public Window createWindow(Long tripId, String flatNumber, Long floorId, Window window) {
-//
-//        Trip trip = tripRepository.findById(tripId)
-//                .orElseThrow(() ->
-//                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip not found")
-//                );
-//
-//        Flat flat = flatRepository.findByFlatNumber(flatNumber)
-//                .orElseThrow(() ->
-//                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Flat not found")
-//                );
-//
-//        window.setTrip(trip);
-//        window.setFlat(flat);
-//
-//        if (floorId != null) {
-//            Floor floor = floorRepository.findById(floorId)
-//                    .orElseThrow(() ->
-//                            new ResponseStatusException(HttpStatus.BAD_REQUEST, "Floor not found")
-//                    );
-//            window.setFloor(floor);
-//        }
-//
-//        return windowRepository.save(window);
-//    }
+
 
 
 

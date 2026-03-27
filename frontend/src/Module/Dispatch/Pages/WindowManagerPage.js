@@ -1,10 +1,7 @@
-
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
 
 const WindowManager = () => {
@@ -357,22 +354,6 @@ const downloadPDF = async () => {
 };
 
 
-
-// Step 1: Filter + Sort descending by createdAt
-//const filteredWindows = windows.filter((w) => {
-//  if (!w.createdAt) return true;
-//
-//  const recordDateStr = w.createdAt.toString().substring(0, 10);
-//
-//  if (filterDate) return recordDateStr === filterDate;
-//
-//  if (fromDate && toDate) return recordDateStr >= fromDate && recordDateStr <= toDate;
-//
-//  return true;
-//});
-
-
-
 const filteredWindows = windows.filter((w) => {
   // --- Trip ID filter ---
   if (tripIdFilter && (w?.trip?.id ?? w?.tripId)?.toString() !== tripIdFilter) {
@@ -401,7 +382,7 @@ const sortedWindows = [...filteredWindows].sort((a, b) => new Date(b.createdAt) 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #3498db", marginBottom: "20px", paddingBottom: "10px" }}>
         <h2 style={{ color: "#2c3e50", margin: 0 }}>Window Logistics Management (Auto-Sync)</h2>
         <button onClick={downloadPDF} style={{ padding: "10px 20px", backgroundColor: "#e67e22", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
-          📥 DOWNLOAD PDF REPORT
+          📥 GENERATE TRIP DC
         </button>
       </div>
 

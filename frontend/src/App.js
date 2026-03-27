@@ -28,6 +28,8 @@ import CancellationInfo from "./Module/Dispatch/Pages/CancellationInfo";
 import VehiclePortalPage from "./Module/Dispatch/Pages/VehiclePortalPage";
 import WindowManagerPage from "./Module/Dispatch/Pages/WindowManagerPage";
 import BulkUploadWindowPage from "./Module/Dispatch/Pages/BulkUploadWindowPage"; // adjust path if needed
+import ItemDCPage from "./Module/Dispatch/Pages/ItemDCPage";
+import DispatchReport from "./Module/Dispatch/Pages/DispatchReport";
 // Other Dashboards
 import ProductionDashboard from "./pages/ProductionDashbaord";
 import SiteSupervisorDashboard from "./pages/SiteSupervisorDashboard";
@@ -83,6 +85,11 @@ function App() {
                       path="/dispatch-dashboard/bulk-upload-window"
                       element={<BulkUploadWindowPage />}
                     />
+                    <Route path="material-dc" element={<ItemDCPage />} />
+                   <Route
+                     path="/dispatch-dashboard/dispatch-report"
+                     element={<DispatchReport/>}
+                   />
                 </Route>
 
                 {/* Other Dashboards */}
