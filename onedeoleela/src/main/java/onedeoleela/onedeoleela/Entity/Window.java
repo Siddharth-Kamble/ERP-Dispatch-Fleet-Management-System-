@@ -1,10 +1,12 @@
 package onedeoleela.onedeoleela.Entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -62,6 +64,10 @@ public class Window {
     @JoinColumn(name = "trip_id")
     private Trip trip;
 
+
+    @Transient
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate userDate;
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     @PrePersist

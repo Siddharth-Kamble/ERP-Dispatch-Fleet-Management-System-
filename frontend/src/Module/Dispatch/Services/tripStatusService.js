@@ -1,37 +1,4 @@
-// import axios from "axios";
-//
-// const BASE_URL = "http://localhost:8080/api/trip-status-update";
-//
-// const getDriverTrips = async (eCode) => {
-//     const res = await axios.get(`${BASE_URL}/driver/${eCode}`);
-//     return res.data;
-// };
-//
-// const acknowledgeTrip = async (tripId) => {
-//     const res = await axios.patch(`${BASE_URL}/trip/${tripId}/acknowledge`);
-//     return res.data;
-// };
-//
-// const updateTripStatus = async (tripId, status) => {
-//     const res = await axios.patch(
-//         `${BASE_URL}/trip/${tripId}/status`,
-//         null,
-//         { params: { status } }
-//     );
-//     return res.data;
-// };
-//
-// const getTripStatus = async (tripId) => {
-//     const res = await axios.get(`${BASE_URL}/trip/${tripId}/latest`);
-//     return res.data;
-// };
-//
-// export default {
-//     getDriverTrips,
-//     acknowledgeTrip,
-//     updateTripStatus,
-//     getTripStatus
-// };
+
 
 import axios from "axios";
 

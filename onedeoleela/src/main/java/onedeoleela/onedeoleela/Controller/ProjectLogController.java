@@ -2,9 +2,11 @@ package onedeoleela.onedeoleela.Controller;
 
 import onedeoleela.onedeoleela.Entity.ProjectLog;
 import onedeoleela.onedeoleela.Service.ProjectLogService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/logs")
@@ -35,5 +37,10 @@ public class ProjectLogController {
     @GetMapping("/project/{projectName}")
     public List<ProjectLog> getLogsByProjectName(@PathVariable String projectName){
         return projectLogService.getLogsByProjectName(projectName);
+    }
+
+    @GetMapping("/trip/{tripId}/dates")
+    public ResponseEntity<Map<String, Object>> getTripDates(@PathVariable Long tripId) {
+        return ResponseEntity.ok(projectLogService.getTripDates(tripId));
     }
 }

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -12,6 +11,7 @@ const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
 
 const ProjectLogAndUpload = () => {
   const [projects, setProjects] = useState([]);
+  const [towers, setTowers] = useState([]); // State for Towers
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -19,10 +19,12 @@ const ProjectLogAndUpload = () => {
 
   const [dispatchDetails, setDispatchDetails] = useState({
     projectId: "",
+    towerId: "", // Field for Tower
     dcNo: "",
     workOrderNumber: "",
     codeNo: "",
-    tripId: ""
+    tripId: "",
+     userDate: ""
   });
 
   useEffect(() => {
@@ -33,16 +35,23 @@ const ProjectLogAndUpload = () => {
   const resetForm = () => {
     setDispatchDetails({
       projectId: "",
+      towerId: "",
       dcNo: "",
       workOrderNumber: "",
       codeNo: "",
-      tripId: ""
+      tripId: "",
+      userDate: ""
     });
+    setTowers([]);
     setFile(null);
     setUploadProgress(0);
+    // Also clear specific local storage for consistency
+    localStorage.removeItem("tripId");
+    localStorage.removeItem("projectId");
+    localStorage.removeItem("towerId");
   };
 
-  /* ================= INTERNAL LOGIC (UNCHANGED) ================= */
+  /* ================= INTERNAL LOGIC ================= */
   const fetchProjects = async () => {
     try {
       const res = await axios.get(`${API_URL}/projects`);
@@ -52,9 +61,29 @@ const ProjectLogAndUpload = () => {
     }
   };
 
+  const fetchTowers = async (projectId) => {
+    try {
+      const res = await axios.get(`${API_URL}/api/towers/project/${projectId}`);
+      setTowers(res.data || []);
+    } catch (error) {
+      console.error("Error fetching towers:", error);
+      setTowers([]);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setDispatchDetails(prev => ({ ...prev, [name]: value }));
+
+    // If Project changes, fetch towers
+    if (name === "projectId") {
+      if (value) {
+        fetchTowers(value);
+      } else {
+        setTowers([]);
+      }
+      setDispatchDetails(prev => ({ ...prev, towerId: "" })); // Reset tower selection
+    }
   };
 
   const handleFileChange = (e) => {
@@ -64,9 +93,9 @@ const ProjectLogAndUpload = () => {
 
   const submitProjectLog = async () => {
     try {
-      const { projectId, tripId } = dispatchDetails;
-      if (!projectId || !tripId) {
-        alert("Please select Project and Trip ID");
+      const { projectId, towerId, tripId } = dispatchDetails;
+      if (!projectId || !towerId || !tripId) {
+        alert("Please select Project, Tower and Trip ID");
         return;
       }
       setLoading(true);
@@ -76,11 +105,19 @@ const ProjectLogAndUpload = () => {
         dcNo: dispatchDetails.dcNo,
         workOrderNumber: dispatchDetails.workOrderNumber,
         codeNo: dispatchDetails.codeNo,
-        tripId: Number(tripId)
+        userDate: dispatchDetails.userDate,
+        tripId: Number(tripId),
+        tower: {
+            towerId: Number(dispatchDetails.towerId)
+          }
       };
       await axios.post(`${API_URL}/logs`, payload);
+
+      // Save IDs to localStorage for Step 2
       localStorage.setItem("tripId", tripId);
       localStorage.setItem("projectId", projectId);
+      localStorage.setItem("towerId", towerId); // Storing Tower ID for Bulk Upload
+
       alert("✅ Project Log Submitted Successfully!");
     } catch (error) {
       console.error(error);
@@ -90,49 +127,215 @@ const ProjectLogAndUpload = () => {
     }
   };
 
-  const uploadExcel = async () => {
-    try {
-      const storedTripId = localStorage.getItem("tripId");
-      const storedProjectId = localStorage.getItem("projectId");
-      if (!file || !storedTripId || !storedProjectId) {
-        alert("Please submit project log first and select file");
-        return;
-      }
 
-      setLoading(true);
-      let interval = setInterval(() => {
-        setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
-      }, 200);
+const uploadExcel = async () => {
+  try {
+    // 1. Retrieve required IDs from localStorage
+    const storedTripId = localStorage.getItem("tripId");
+    const storedTowerId = localStorage.getItem("towerId");
+    // ProjectId is not explicitly used by the backend method you showed, but we'll check it to be safe
+    const storedProjectId = localStorage.getItem("projectId");
 
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", storedProjectId);
-
-      const res = await axios.post(`${API_URL}/windows/trip/${storedTripId}/bulk-upload`, formData);
-
-      clearInterval(interval);
-      setUploadProgress(100);
-
-      setTimeout(() => {
-        setShowSuccess(true);
-        setLoading(false);
-        resetForm(); // Auto-Reset after success
-      }, 500);
-
-    } catch (error) {
-      console.error("Upload Error:", error);
-      alert(error.response?.data || "❌ Upload failed");
-      setLoading(false);
-      setUploadProgress(0);
+    // 2. Critical Check: Ensure all identifiers are present
+    if (!file || !storedTripId || !storedTowerId) {
+      alert("Please complete Step 1 (Save Dispatch Log) first to lock in the Project and Tower.");
+      return;
     }
-  };
+
+    setLoading(true);
+
+    // UI Logic: Keeping your existing interval for progress
+    let interval = setInterval(() => {
+      setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
+    }, 200);
+
+    // 3. Prepare FormData - ONLY append the file here
+    // The backend @RequestParam("file") expects this key
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // 4. Make the POST request
+    // We pass towerId via 'params' which Axios automatically attaches as ?towerId=...
+    const res = await axios.post(
+      `${API_URL}/windows/trip/${storedTripId}/bulk-upload`,
+      formData,
+      {
+        params: {
+          towerId: storedTowerId
+        },
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }
+    );
+
+    // 5. Success Handling
+    clearInterval(interval);
+    setUploadProgress(100);
+
+    setTimeout(() => {
+      setShowSuccess(true);
+      setLoading(false);
+      resetForm(); // Resets UI and clear localStorage
+    }, 500);
+
+  } catch (error) {
+    console.error("Upload Error:", error);
+    // Properly catch the backend's error message (e.g., "Tower not found")
+    alert(error.response?.data || "❌ Upload failed");
+    setLoading(false);
+    setUploadProgress(0);
+  }
+};
+
+
+
+//  const uploadExcel = async () => {
+//      try {
+//        // 1. Get all required IDs from localStorage
+//        const storedTripId = localStorage.getItem("tripId");
+//        const storedProjectId = localStorage.getItem("projectId");
+//        const storedTowerId = localStorage.getItem("towerId"); // Fetch the Tower ID
+//
+//        // 2. Critical Check: Ensure Tower ID exists
+//        if (!file || !storedTripId || !storedProjectId || !storedTowerId) {
+//          alert("Please complete Step 1 (Save Dispatch Log) first to lock in the Project and Tower.");
+//          return;
+//        }
+//
+//        setLoading(true);
+//        let interval = setInterval(() => {
+//          setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
+//        }, 200);
+//
+//        const formData = new FormData();
+//        formData.append("file", file);
+//        formData.append("projectId", storedProjectId);
+//        formData.append("towerId", storedTowerId); // SENDING THE TOWER ID TO BACKEND
+//
+//        // 3. Make the POST request
+//        const res = await axios.post(
+//          `${API_URL}/windows/trip/${storedTripId}/bulk-upload?towerId=${storedTowerId}`,
+//          formData,
+//          {
+//            headers: {
+//              'Content-Type': 'multipart/form-data'
+//            }
+//          }
+//        );
+//
+//        clearInterval(interval);
+//        setUploadProgress(100);
+//
+//        setTimeout(() => {
+//          setShowSuccess(true);
+//          setLoading(false);
+//          resetForm();
+//        }, 500);
+//
+//      } catch (error) {
+//        console.error("Upload Error:", error);
+//        // This will now show "Tower not found" if the ID is still missing
+//        alert(error.response?.data || "❌ Upload failed");
+//        setLoading(false);
+//        setUploadProgress(0);
+//      }
+//    };
+
+
+
+
+//  const uploadExcel = async () => {
+//      try {
+//        const storedTripId = localStorage.getItem("tripId");
+//        const storedProjectId = localStorage.getItem("projectId");
+//        if (!file || !storedTripId || !storedProjectId) {
+//          alert("Please submit project log first and select file");
+//          return;
+//        }
+//
+//        setLoading(true);
+//        let interval = setInterval(() => {
+//          setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
+//        }, 200);
+//
+//        const formData = new FormData();
+//        formData.append("file", file);
+//        formData.append("projectId", storedProjectId);
+//
+//        const res = await axios.post(`${API_URL}/windows/trip/${storedTripId}/bulk-upload`, formData);
+//
+//        clearInterval(interval);
+//        setUploadProgress(100);
+//
+//        setTimeout(() => {
+//          setShowSuccess(true);
+//          setLoading(false);
+//          resetForm(); // Auto-Reset after success
+//        }, 500);
+//
+//      } catch (error) {
+//        console.error("Upload Error:", error);
+//        alert(error.response?.data || "❌ Upload failed");
+//        setLoading(false);
+//        setUploadProgress(0);
+//      }
+//    };
+//
+//  const uploadExcel = async () => {
+//    try {
+//      const storedTripId = localStorage.getItem("tripId");
+//      const storedProjectId = localStorage.getItem("projectId");
+//      const storedTowerId = localStorage.getItem("towerId"); // Fetch Tower ID from localStorage
+//
+//      if (!file || !storedTripId || !storedProjectId || !storedTowerId) {
+//        alert("Please submit project log first (with Tower) and select file");
+//        return;
+//      }
+//
+//      setLoading(true);
+//      let interval = setInterval(() => {
+//        setUploadProgress((prev) => (prev < 90 ? prev + 10 : prev));
+//      }, 200);
+//
+//      const formData = new FormData();
+//      formData.append("file", file);
+//      formData.append("projectId", storedProjectId);
+//      formData.append("towerId", storedTowerId); // Added towerId to prevent "Tower not found" error
+//
+//      const res = await axios.post(
+//        `${API_URL}/windows/trip/${storedTripId}/bulk-upload`,
+//        formData,
+//        {
+//          headers: {
+//            'Content-Type': 'multipart/form-data'
+//          }
+//        }
+//      );
+//
+//      clearInterval(interval);
+//      setUploadProgress(100);
+//
+//      setTimeout(() => {
+//        setShowSuccess(true);
+//        setLoading(false);
+//        resetForm(); // Auto-Reset after success
+//      }, 500);
+//
+//    } catch (error) {
+//      console.error("Upload Error:", error);
+//      alert(error.response?.data || "❌ Upload failed: Ensure the Tower is selected correctly.");
+//      setLoading(false);
+//      setUploadProgress(0);
+//    }
+//  };
 
   /* ================= CLEAN LIGHT UI STYLES ================= */
 
   const containerStyle = {
     minHeight: "100vh",
     padding: "60px 20px",
-    backgroundColor: "#f9fafb", // Clean light background
+    backgroundColor: "#f9fafb",
     fontFamily: "'Inter', sans-serif",
     color: "#1f2937",
   };
@@ -223,7 +426,7 @@ const ProjectLogAndUpload = () => {
             <IconTruck />
             <span style={{ fontSize: "12px", fontWeight: "700", color: "#2563eb", letterSpacing: "1px" }}>DISPATCH MODULE</span>
           </div>
-          <h1 style={{ fontSize: "32px", fontWeight: "800", color: "#111827", margin: 0 }}>Logistics Portal</h1>
+          <h1 style={{ fontSize: "32px", fontWeight: "800", color: "#111827", margin: 0 }}>Advance Bulk DC</h1>
           <p style={{ color: "#6b7280", marginTop: "8px" }}>Submit trip manifests and synchronize data</p>
         </div>
 
@@ -234,11 +437,22 @@ const ProjectLogAndUpload = () => {
              <span style={{color: '#2563eb', fontSize: '11px', fontWeight: '800'}}>STEP 01</span>
           </div>
 
-          <label style={labelStyle}>Project Selection</label>
-          <select name="projectId" value={dispatchDetails.projectId} onChange={handleChange} style={inputStyle}>
-            <option value="">-- Choose Project --</option>
-            {projects.map(p => <option key={p.projectId} value={p.projectId}>{p.projectName}</option>)}
-          </select>
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px'}}>
+            <div>
+              <label style={labelStyle}>Project Selection</label>
+              <select name="projectId" value={dispatchDetails.projectId} onChange={handleChange} style={inputStyle}>
+                <option value="">-- Choose Project --</option>
+                {projects.map(p => <option key={p.projectId} value={p.projectId}>{p.projectName}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Tower Selection</label>
+              <select name="towerId" value={dispatchDetails.towerId} onChange={handleChange} style={inputStyle}>
+                <option value="">-- Choose Tower --</option>
+                {towers.map(t => <option key={t.towerId} value={t.towerId}>{t.towerName}</option>)}
+              </select>
+            </div>
+          </div>
 
           <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px'}}>
             <div>
@@ -258,6 +472,18 @@ const ProjectLogAndUpload = () => {
             <div>
                 <label style={labelStyle}>Trip ID</label>
                 <input name="tripId" value={dispatchDetails.tripId} type="number" placeholder="Numeric ID" style={inputStyle} onChange={handleChange} />
+            </div>
+          </div>
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px'}}>
+            <div>
+              <label style={labelStyle}>User Date</label>
+           <input
+             type="date"
+             name="userDate"
+             value={dispatchDetails.userDate || ""}
+             onChange={handleChange}
+             style={inputStyle}
+           />
             </div>
           </div>
 

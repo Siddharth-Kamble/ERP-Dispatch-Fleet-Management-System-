@@ -17,11 +17,20 @@ function ActiveTripPage() {
                     `${process.env.REACT_APP_API_URL}/api/trips/active-vehicles`
                 );
 
-                if (Array.isArray(res.data)) {
-                    setVehicles(res.data);
-                } else {
-                    setVehicles([]);
-                }
+
+if (Array.isArray(res.data)) {
+
+    const uniqueVehicles = [...new Set(
+        res.data
+            .filter(v => v !== null)
+            .map(v => v.trim().toUpperCase())
+    )];
+
+    setVehicles(uniqueVehicles);
+
+} else {
+    setVehicles([]);
+}
 
             } catch (err) {
 
@@ -57,10 +66,12 @@ function ActiveTripPage() {
                     </p>
                 </div>
 
-                <div style={styles.activeBadge}>
-                    <span style={styles.pulseDot}></span>
-                    {vehicles.length} Active Now
-                </div>
+              {!loading && (
+                  <div style={styles.activeBadge}>
+                      <span style={styles.pulseDot}></span>
+                      {vehicles.length} Active Now
+                  </div>
+              )}
 
             </div>
 

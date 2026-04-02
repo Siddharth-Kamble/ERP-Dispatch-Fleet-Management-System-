@@ -44,30 +44,35 @@ public class ItemController {
             return ResponseEntity.ok().<Void>build();
         }).orElse(ResponseEntity.notFound().build());
     }
-    @PostMapping("/upload/{tripId}")
-    public ResponseEntity<String> bulkUploadItems(
-            @PathVariable("tripId") Long tripId,       // Trip ID from URL
-            @RequestParam("projectId") Long projectId, // Project ID for floors
-            @RequestParam("file") MultipartFile file   // Excel file
-    ) {
-        try {
-            String message = itemService.bulkUpload(file, tripId, projectId);
-            return ResponseEntity.ok(message);
-        } catch (Exception e) {
-            return ResponseEntity.status(500)
-                    .body("Bulk upload failed: " + e.getMessage());
+        @PostMapping("/upload/{tripId}")
+        public ResponseEntity<String> bulkUploadItems(
+                @PathVariable("tripId") Long tripId,
+                @RequestParam("projectId") Long projectId,
+                @RequestParam("towerId") Long towerId,   // ✅ NEW
+                @RequestParam("file") MultipartFile file
+        ) {
+            try {
+                String message = itemService.bulkUpload(file, tripId, projectId, towerId);
+                return ResponseEntity.ok(message);
+            } catch (Exception e) {
+                return ResponseEntity.status(500)
+                        .body("Bulk upload failed: " + e.getMessage());
+            }
         }
-    }
 
     @PostMapping("/create")
     public ResponseEntity<Item> createSingleItem(
             @RequestParam Long tripId,
             @RequestParam Long projectId,
+            @RequestParam Long towerId,   // ✅ NEW
             @RequestBody Item item
     ) {
-        Item savedItem = itemService.createSingleItem(item, tripId, projectId);
+        Item savedItem = itemService.createSingleItem(item, tripId, projectId, towerId);
         return ResponseEntity.ok(savedItem);
     }
+
+
+
     @PutMapping("/{id}")
     public ResponseEntity<Item> updateItem(
             @PathVariable Long id,

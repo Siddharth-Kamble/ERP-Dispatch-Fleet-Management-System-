@@ -71,6 +71,8 @@ public class Item {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
     }
-
+    @ManyToOne
+    @JoinColumn(name = "tower_id")
+    private Tower tower;   // ✅ NEW
 
 }

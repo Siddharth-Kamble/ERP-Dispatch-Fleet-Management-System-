@@ -1,3 +1,4 @@
+
             import React, { useState, useEffect } from "react";
             import axios from "axios";
             import jsPDF from "jspdf";
@@ -20,12 +21,15 @@
               const [editingWindow, setEditingWindow] = useState(null);
               const [tripIdFilter, setTripIdFilter] = useState("");
               const [excelFile, setExcelFile] = useState(null);
+              const [towers, setTowers] = useState([]);
+              const [selectedTower, setSelectedTower] = useState("");
               const [dispatchDetails, setDispatchDetails] = useState({
                 projectName: "",
                 dcNo: "",
                 workOrderNumber: "",
                 codeNo: "",
-                tripId: ""
+                tripId: "",
+                 userDate: ""
               });
 
              const initialState = {
@@ -80,49 +84,77 @@
                 }
               };
 
-              const handleDispatchChange = async (e) => {
-                const { name, value } = e.target;
-                setDispatchDetails(prev => ({ ...prev, [name]: value }));
 
-                if (name === "projectName" && value) {
-                  const selectedProjectObj = projects.find(p => p.projectName === value);
-                  if (selectedProjectObj) {
-                    const projectId = selectedProjectObj.id ?? selectedProjectObj.projectId;
-                    if (projectId) {
-                      try {
-                        const floorResponse = await axios.get(`${API_URL}/floors/project/${projectId}`);
-                        setFloors(floorResponse.data || []);
-                        setSelectedFloor("");
-                        setFlats([]);
-                      } catch (error) {
-                        console.error("Error fetching floors:", error);
-                        setFloors([]);
-                        setSelectedFloor("");
-                        setFlats([]);
-                      }
-                    }
-                  }
-                  try {
-                    const logResponse = await axios.get(`${API_URL}/logs/project/${value}`);
-                    if (logResponse.data && logResponse.data.length > 0) {
-                      const latestLog = logResponse.data[0];
-                      setDispatchDetails(prev => ({
-                        ...prev,
-                        dcNo: latestLog.dcNo || prev.dcNo,
-                        workOrderNumber: latestLog.workOrderNumber || prev.workOrderNumber,
-                        codeNo: latestLog.codeNo || prev.codeNo,
-                        tripId: latestLog.tripId || prev.tripId
-                      }));
-                    }
-                  } catch (error) {
-                    console.error("Error fetching logs:", error);
-                  }
-                }
 
-                if (name === "tripId" && value) {
-                  fetchDispatchDetails(value);
-                }
-              };
+
+
+const handleDispatchChange = async (e) => {
+  const { name, value } = e.target;
+  setDispatchDetails(prev => ({ ...prev, [name]: value }));
+
+  if (name === "projectName" && value) {
+    const selectedProjectObj = projects.find(p => p.projectName === value);
+    if (selectedProjectObj) {
+      const projectId = selectedProjectObj.id ?? selectedProjectObj.projectId;
+      if (projectId) {
+        try {
+          // NEW: fetch towers first
+    const towerResponse = await axios.get(`${API_URL}/api/towers/project/${projectId}`);
+          setTowers(towerResponse.data || []);
+          setSelectedTower("");
+          setFloors([]);
+          setSelectedFloor("");
+          setFlats([]);
+          setFlatNumber("");
+        } catch (error) {
+          console.error("Error fetching towers:", error);
+          setTowers([]);
+        }
+      }
+    }
+    try {
+      const logResponse = await axios.get(`${API_URL}/logs/project/${value}`);
+      if (logResponse.data && logResponse.data.length > 0) {
+        const latestLog = logResponse.data[0];
+        setDispatchDetails(prev => ({
+          ...prev,
+          dcNo: latestLog.dcNo || prev.dcNo,
+          workOrderNumber: latestLog.workOrderNumber || prev.workOrderNumber,
+          codeNo: latestLog.codeNo || prev.codeNo,
+          tripId: latestLog.tripId || prev.tripId
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching logs:", error);
+    }
+  }
+
+  if (name === "tripId" && value) {
+    fetchDispatchDetails(value);
+  }
+};
+
+
+
+
+
+
+const handleTowerChange = async (e) => {
+  const towerId = e.target.value;
+  setSelectedTower(towerId);
+  setFloors([]);
+  setSelectedFloor("");
+  setFlats([]);
+  setFlatNumber("");
+  if (towerId) {
+    try {
+      const floorResponse = await axios.get(`${API_URL}/floors/tower/${towerId}`);
+      setFloors(floorResponse.data || []);
+    } catch (error) {
+      console.error("Error fetching floors:", error);
+    }
+  }
+};
 
               const handleFloorChange = async (e) => {
                 const floorId = e.target.value;
@@ -175,27 +207,74 @@
                 }
               };
 
-              const submitProjectLog = async () => {
-                try {
-                  if (!dispatchDetails.projectName || !dispatchDetails.tripId) {
-                    alert("Please enter both Project Name and Trip ID");
-                    return;
-                  }
-                  const payload = {
-                    ...dispatchDetails,
-                    tripId: parseInt(dispatchDetails.tripId)
-                  };
-                  await axios.post(`${API_URL}/logs`, payload);
-                  alert("Project Log Submitted Successfully!");
-                } catch (error) {
-                  alert("Failed to submit project log");
-                }
-              };
+
+const submitProjectLog = async () => {
+  if (!dispatchDetails.projectName || !selectedTower || !dispatchDetails.tripId) {
+    alert("Please select Project, Tower and enter Trip ID");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    // Get Project ID from project name
+    const selectedProjectObj = projects.find(
+      (p) => p.projectName === dispatchDetails.projectName
+    );
+
+    const projectId = selectedProjectObj?.projectId || selectedProjectObj?.id;
+
+    const payload = {
+      projectName: dispatchDetails.projectName,
+      dcNo: dispatchDetails.dcNo,
+      workOrderNumber: dispatchDetails.workOrderNumber,
+      codeNo: dispatchDetails.codeNo,
+      tripId: Number(dispatchDetails.tripId),
+        userDate: dispatchDetails.userDate,   // ✅ ADD THIS
+      tower: {
+        towerId: Number(selectedTower), // ✅ correct
+      },
+    };
+
+    await axios.post(`${API_URL}/logs`, payload);
+
+    // ✅ Store correct values
+    localStorage.setItem("tripId", dispatchDetails.tripId);
+    localStorage.setItem("projectId", projectId);
+    localStorage.setItem("towerId", selectedTower);
+
+    alert("✅ Project Log Submitted Successfully!");
+  } catch (error) {
+    console.error("Submission Error:", error);
+    alert("❌ Failed to submit project log.");
+  } finally {
+    setLoading(false);
+  }
+};
+//              const submitProjectLog = async () => {
+//                try {
+//                  if (!dispatchDetails.projectName || !dispatchDetails.tripId) {
+//                    alert("Please enter both Project Name and Trip ID");
+//                    return;
+//                  }
+//                  const payload = {
+//                    ...dispatchDetails,
+//                    tripId: parseInt(dispatchDetails.tripId),
+//                      tower: {
+//                                towerId: Number(dispatchDetails.towerId)
+//                              }
+//                  };
+//                  await axios.post(`${API_URL}/logs`, payload);
+//                  alert("Project Log Submitted Successfully!");
+//                } catch (error) {
+//                  alert("Failed to submit project log");
+//                }
+//              };
 
             const createWindow = async () => {
               try {
-                if (!dispatchDetails?.tripId || !flatNumber) {
-                  alert("Please select a Trip and Flat Number.");
+                if (!dispatchDetails?.tripId || !selectedTower || !flatNumber) {
+                  alert("Please select a Trip, Tower and Flat Number.");
                   return;
                 }
 
@@ -223,14 +302,15 @@
                   qty: parseInt(formData.qty) || 0,
                   unit: formData.unit,
                   sqFt: parseFloat(formData.weight) || 0, // ✅ SAME FORMULA USED
-                  remarks: formData.remarks
+                  remarks: formData.remarks,
+                   //towerId: parseInt(selectedTower) || null
                 };
 
                 // ✅ ONLY ITEM API CALL (original removed)
-                await axios.post(
-                  `${API_URL}/api/items/create?tripId=${dispatchDetails.tripId}&projectId=${projectId}`,
-                  payload
-                );
+               await axios.post(
+                 `${API_URL}/api/items/create?tripId=${dispatchDetails.tripId}&projectId=${projectId}&towerId=${selectedTower}`,
+                 payload
+               );
 
                 alert("Item created successfully!");
                 getAllWindows(); // optional refresh
@@ -243,151 +323,241 @@
             };
 
 
-        const downloadPDF = async () => {
-          const tripInput = prompt("Enter Trip ID (optional):")?.trim();
+ const downloadPDF = async () => {
+   const tripInput = prompt("Enter Trip ID (optional):")?.trim();
 
-          let filteredWindows = windows;
+   let filteredWindows = windows;
 
-          let dispatchInfo = {
-            projectName: "N/A",
-            dcNo: "N/A",
-            workOrderNumber: "N/A",
-            codeNo: "N/A",
-          };
+   let dispatchInfo = {
+     projectName: "N/A",
+     dcNo: "N/A",
+     workOrderNumber: "N/A",
+     codeNo: "N/A",
+   };
 
-          if (tripInput) {
-            filteredWindows = windows.filter(
-              (w) => (w?.trip?.id ?? w?.tripId)?.toString() === tripInput
-            );
+   // ✅ ADDED: Tower name variable
+   let dynamicTowerName = "N/A";
 
-            if (filteredWindows.length === 0) {
-              return alert("No windows found for the entered Trip ID.");
-            }
+   // ✅ FIX: Declare date variables OUTSIDE
+   let actualDate = null;
+   let userDate = null;
+   let sameDate = true;
 
-            try {
-              const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
-              if (response.data && response.data.length > 0) {
-                const latestLog = response.data[0];
-                dispatchInfo = {
-                  projectName: latestLog.projectName || "N/A",
-                  dcNo: latestLog.dcNo || "N/A",
-                  workOrderNumber: latestLog.workOrderNumber || "N/A",
-                  codeNo: latestLog.codeNo || "N/A",
-                };
-              }
-            } catch (error) {
-              console.error("Error fetching project log for Trip:", error);
-            }
-          }
+   if (tripInput) {
+     filteredWindows = windows.filter(
+       (w) => (w?.trip?.id ?? w?.tripId)?.toString() === tripInput
+     );
 
-          if (filteredWindows.length === 0) {
-            return alert("No data available to generate PDF.");
-          }
+     if (filteredWindows.length === 0) {
+       return alert("No windows found for the entered Trip ID.");
+     }
 
-          const doc = new jsPDF("landscape");
-          const refWindow = filteredWindows[0];
-          const refTrip = refWindow?.trip || {};
+     try {
+       const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
+       if (response.data && response.data.length > 0) {
+         const latestLog = response.data[0];
 
-          // --- LOGO ---
-          const cloudinaryLogoUrl =
-            "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+         // ✅ FETCH DATE COMPARISON API
+         try {
+           const dateRes = await axios.get(
+             `${API_URL}/logs/trip/${tripInput}/dates`
+           );
 
-          try {
-            doc.addImage(cloudinaryLogoUrl, "PNG", 35, 8, 38, 20);
-            doc.setDrawColor(220, 220, 220);
-            doc.line(14, 33, 283, 33);
-          } catch (e) {
-            console.error("Logo failed to load", e);
-          }
+           if (dateRes.data) {
+             actualDate = dateRes.data.actualDate;
+             userDate = dateRes.data.userDate;
+             sameDate = dateRes.data.sameDate;
+           }
+         } catch (err) {
+           console.error("Error fetching date comparison:", err);
+         }
 
-          // --- HEADER ---
-          doc.setFontSize(16);
-          doc.setTextColor(40, 40, 40);
-          doc.text(
-            "ONEDEO LEELA FAÇADE SYSTEMS PRIVATE LIMITED",
-            160,
-            18,
-            { align: "center" }
-          );
+         dispatchInfo = {
+           projectName: latestLog.projectName || "N/A",
+           dcNo: latestLog.dcNo || "N/A",
+           workOrderNumber: latestLog.workOrderNumber || "N/A",
+           codeNo: latestLog.codeNo || "N/A",
+         };
 
-          doc.setFontSize(8);
-          doc.setTextColor(100, 100, 100);
-          doc.text(
-            "Building No/Flat No 327, Bopgaon Chouck, Pune, Maharashtra 412301",
-            160,
-            25,
-            { align: "center" }
-          );
+         // ✅ ADDED: Fetch Tower Name dynamically
+         if (latestLog.projectName) {
+           const projectRes = await axios.get(
+             `${API_URL}/projects/by-name/${latestLog.projectName}`
+           );
+           const pId = projectRes.data?.projectId;
 
-          // --- PROJECT/TRIP INFO ---
-          doc.setFontSize(10);
-          doc.setTextColor(0, 0, 0);
-          doc.text(`Project Name: ${dispatchInfo.projectName}`, 14, 42);
-          doc.text(`DC No: ${dispatchInfo.dcNo}`, 14, 48);
-          doc.text(`Work Order No: ${dispatchInfo.workOrderNumber}`, 14, 54);
-          doc.text(`Code No: ${dispatchInfo.codeNo}`, 14, 60);
+           const refWindow = filteredWindows[0];
+           const tId =
+             refWindow?.tower?.towerId ||
+             refWindow?.towerId ||
+             selectedTower;
 
-          doc.text(`Trip ID: ${tripInput || refTrip.id || "All"}`, 220, 42);
-          doc.text(`Date: ${new Date().toLocaleDateString()}`, 220, 48);
-          doc.text(`Vehicle No: ${refTrip.vehicleNumber || "N/A"}`, 220, 54);
-          doc.text(`Driver Name: ${refTrip.driverName || "N/A"}`, 220, 60);
-          doc.text(`Trip Status: ${refTrip.status || "N/A"}`, 220, 66);
+           if (pId && tId) {
+             const towerRes = await axios.get(
+               `${API_URL}/api/towers/project/${pId}`
+             );
+             const foundTower = towerRes.data.find(
+               (t) => t.towerId == tId
+             );
+             if (foundTower) {
+               dynamicTowerName = foundTower.towerName;
+             }
+           }
+         }
+       }
+     } catch (error) {
+       console.error("Error fetching project log for Trip:", error);
+     }
+   }
 
-          // --- TABLE COLUMNS ---
-          const tableColumn = [
-            "Sr No.",
-            "Win. Sr. No.",
-            "Flat No",
-            "Location",
-            "Job Card No.",
-            "Description",
-            "Width",
-            "Height",
-            "Qty.",
-            "Unit",
-            "Weight",
-            "Remarks",
-          ];
+   if (filteredWindows.length === 0) {
+     return alert("No data available to generate PDF.");
+   }
 
-          // --- TABLE ROWS ---
-          const tableRows = filteredWindows.map((w, index) => [
-            index + 1,
-            w.winSrNo ?? "N/A",                  // Win. Sr. No
-            w?.flat?.flatNo ?? w.flatNo ?? "N/A", // Flat No
-            w.location ?? "N/A",                  // Location
-            w.jobCardNo ?? "N/A",                 // Job Card No
-            w.description ?? "N/A",               // Description
-            w.width != null ? w.width : 0,        // Width
-            w.height != null ? w.height : 0,      // Height
-            w.qty != null ? w.qty : 0,            // Qty
-            w.unit ?? "N/A",                      // Unit
-            w.sqFt != null ? w.sqFt : 0,          // Weight (SqFt treated as Weight)
-            w.remarks ?? "",                       // Remarks
-          ]);
+   const doc = new jsPDF("landscape");
+   const refWindow = filteredWindows[0];
+   const refTrip = refWindow?.trip || {};
 
-          autoTable(doc, {
-            head: [tableColumn],
-            body: tableRows,
-            startY: 75,
-            theme: "grid",
-            styles: { fontSize: 7 },
-            headStyles: { fillColor: [44, 62, 80] },
-          });
+   // ✅ Tower display
+   const towerDisplay =
+     dynamicTowerName !== "N/A"
+       ? dynamicTowerName
+       : towers.find((t) => t.towerId == selectedTower)?.towerName ||
+         "N/A";
 
-          const finalY = (doc.lastAutoTable?.finalY || 75) + 10;
+   // --- LOGO ---
+   const cloudinaryLogoUrl =
+     "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
 
-          // --- TOTAL WEIGHT ---
-          const totalWeight = filteredWindows
-            .reduce((sum, w) => sum + (parseFloat(w.sqFt) || 0), 0)
-            .toFixed(2);
-          doc.text(`Total Weight: ${totalWeight}`, 250, finalY);
+   try {
+     doc.addImage(cloudinaryLogoUrl, "PNG", 35, 8, 38, 20);
+     doc.setDrawColor(220, 220, 220);
+     doc.line(14, 33, 283, 33);
+   } catch (e) {
+     console.error("Logo failed to load", e);
+   }
 
-          doc.text("Prepared By: ________________", 14, finalY + 20);
-          doc.text("Checked By: ________________", 110, finalY + 20);
-          doc.text("Received By: ________________", 210, finalY + 20);
+   // --- HEADER ---
+   doc.setFontSize(16);
+   doc.setTextColor(40, 40, 40);
+   doc.text(
+     "ONEDEO LEELA FAÇADE SYSTEMS PRIVATE LIMITED",
+     160,
+     18,
+     { align: "center" }
+   );
 
-      doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
-    };
+   doc.setFontSize(8);
+   doc.setTextColor(100, 100, 100);
+   doc.text(
+     "Building No/Flat No 327, Bopgaon Chowk, Pune, Maharashtra 412301",
+     160,
+     25,
+     { align: "center" }
+   );
+
+   // --- PROJECT/TRIP INFO ---
+   doc.setFontSize(10);
+   doc.setTextColor(0, 0, 0);
+   doc.text(`Project Name: ${dispatchInfo.projectName}`, 14, 42);
+   doc.text(`Tower Name: ${towerDisplay}`, 14, 48);
+   doc.text(`DC No: ${dispatchInfo.dcNo}`, 14, 54);
+   doc.text(`Work Order No: ${dispatchInfo.workOrderNumber}`, 14, 60);
+   doc.text(`Code No: ${dispatchInfo.codeNo}`, 14, 66);
+
+   doc.text(`Trip ID: ${tripInput || refTrip.id || "All"}`, 220, 42);
+
+   // ✅ FORMAT DATES (FIXED)
+   const actualDateFormatted = actualDate
+     ? new Date(actualDate).toLocaleDateString()
+     : new Date().toLocaleDateString();
+
+   const userDateFormatted = userDate
+     ? new Date(userDate).toLocaleDateString()
+     : null;
+
+   let yPosition = 54;
+
+   // ✅ SHOW BOTH DATES IF DIFFERENT
+  // ✅ RIGHT SIDE DATE (ONLY ACTUAL DATE)
+  doc.text(`Date: ${actualDateFormatted}`, 220, 48);
+
+  // ✅ LEFT SIDE → BELOW CODE NO (NEW POSITION)
+  if (!sameDate && userDateFormatted) {
+    doc.text(`Material Delivery Date: ${userDateFormatted}`, 14, 72);
+  }
+
+   doc.text(
+     `Vehicle No: ${refTrip.vehicleNumber || "N/A"}`,
+     220,
+     yPosition
+   );
+   doc.text(
+     `Driver Name: ${refTrip.driverName || "N/A"}`,
+     220,
+     yPosition + 6
+   );
+   doc.text(
+     `Trip Status: ${refTrip.status || "N/A"}`,
+     220,
+     yPosition + 12
+   );
+
+   // --- TABLE ---
+   const tableColumn = [
+     "Sr No.",
+     "Win. Sr. No.",
+     "Flat No",
+     "Location",
+     "Job Card No.",
+     "Description",
+     "Width",
+     "Height",
+     "Qty.",
+     "Unit",
+     "Weight",
+     "Remarks",
+   ];
+
+   const tableRows = filteredWindows.map((w, index) => [
+     index + 1,
+     w.winSrNo ?? "N/A",
+     w?.flat?.flatNo ?? w.flatNo ?? "N/A",
+     w.location ?? "N/A",
+     w.jobCardNo ?? "N/A",
+     w.description ?? "N/A",
+     w.width != null ? w.width : 0,
+     w.height != null ? w.height : 0,
+     w.qty != null ? w.qty : 0,
+     w.unit ?? "N/A",
+     w.sqFt != null ? w.sqFt : 0,
+     w.remarks ?? "",
+   ]);
+
+   autoTable(doc, {
+     head: [tableColumn],
+     body: tableRows,
+     startY: 75,
+     theme: "grid",
+     styles: { fontSize: 7 },
+     headStyles: { fillColor: [44, 62, 80] },
+   });
+
+   const finalY = (doc.lastAutoTable?.finalY || 75) + 10;
+
+   const totalWeight = filteredWindows
+     .reduce((sum, w) => sum + (parseFloat(w.sqFt) || 0), 0)
+     .toFixed(2);
+
+   doc.text(`Total Weight: ${totalWeight}`, 250, finalY);
+
+   doc.text("Prepared By: ________________", 14, finalY + 20);
+   doc.text("Checked By: ________________", 110, finalY + 20);
+   doc.text("Received By: ________________", 210, finalY + 20);
+
+   doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
+ };
+
 
 
         const filteredWindows = windows.filter((w) => {
@@ -416,7 +586,7 @@
             <div style={{ padding: "25px", fontFamily: "'Segoe UI', sans-serif", backgroundColor: "#f9f9f9", minHeight: "100vh" }}>
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #3498db", marginBottom: "20px", paddingBottom: "10px" }}>
-                <h2 style={{ color: "#2c3e50", margin: 0 }}>Window Logistics Management (Auto-Sync)</h2>
+                <h2 style={{ color: "#2c3e50", margin: 0 }}>Material Logistics Management</h2>
                 <button onClick={downloadPDF} style={{ padding: "10px 20px", backgroundColor: "#e67e22", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
                   📥 GENERATE TRIP DC
                 </button>
@@ -434,6 +604,22 @@
                     </select>
                   </div>
 
+
+ <div>
+    <label style={{ fontSize: "11px", color: "#7f8c8d" }}>TOWER</label>
+    <select
+      value={selectedTower}
+      onChange={handleTowerChange}
+      style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #ddd" }}
+    >
+      <option value="">-- Select Tower --</option>
+      {towers.map((t, idx) => (
+        <option key={t.towerId || idx} value={t.towerId}>{t.towerName}</option>
+      ))}
+    </select>
+  </div>
+
+
                   {["dcNo", "workOrderNumber", "codeNo", "tripId"].map(field => (
                     <div key={field}>
                       <label style={{ fontSize: "11px", color: "#7f8c8d" }}>{field.replace(/([A-Z])/g, " $1").toUpperCase()}</label>
@@ -446,7 +632,23 @@
                       />
                     </div>
                   ))}
-
+                 <div>
+                   <label style={{ fontSize: "11px", color: "#7f8c8d" }}>
+                     USER DATE
+                   </label>
+                   <input
+                     type="date"
+                     name="userDate"
+                     value={dispatchDetails.userDate}
+                     onChange={handleDispatchChange}
+                     style={{
+                       width: "100%",
+                       padding: "8px",
+                       borderRadius: "4px",
+                       border: "1px solid #ddd"
+                     }}
+                   />
+                 </div>
                   <div style={{ display: "flex", alignItems: "flex-end" }}>
                     <button onClick={submitProjectLog} style={{ width: "100%", padding: "10px 15px", backgroundColor: "#8e44ad", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
                       SUBMIT PROJECT LOG
@@ -482,7 +684,7 @@
 
               {/* Add Window Form */}
               <div style={{ backgroundColor: "#fff", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", marginBottom: "25px" }}>
-                <h4>Add New Window Details</h4>
+                <h4>Add New Material Details</h4>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "15px" }}>
                  {Object.keys(initialState)
                    .filter(key => key !== "flatNo")
@@ -536,7 +738,8 @@
 
                      const uploadFormData = new FormData();
                      uploadFormData.append("file", excelFile);
-                     uploadFormData.append("projectId", projectIdValue); // send projectId
+                     uploadFormData.append("projectId", projectIdValue);
+                     uploadFormData.append("towerId", selectedTower);
 
                      try {
                        const response = await axios.post(
@@ -556,6 +759,8 @@
                        alert(`Upload failed: ${error.response?.data || error.message}`);
                      }
                    }}
+
+
                    style={{
                      padding: "12px 25px",
                      backgroundColor: "#2980b9",

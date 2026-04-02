@@ -94,16 +94,14 @@ public class WindowController {
     public List<Window> getWindowsByTrip(@PathVariable Long tripId) {
         return windowService.getWindowsByTrip(tripId);
     }
-
     @PostMapping("/trip/{tripId}/bulk-upload")
     public String bulkUpload(
             @PathVariable Long tripId,
-            @RequestParam("projectId") Long projectId,
+            @RequestParam("towerId") Long towerId, // Changed from projectId to towerId
             @RequestParam("file") MultipartFile file) {
 
-        return windowService.bulkUpload(file, tripId, projectId);
+        return windowService.bulkUpload(file, tripId, towerId);
     }
-
     @PutMapping("/{windowId}")
     public Window updateWindow(
             @PathVariable Long windowId,

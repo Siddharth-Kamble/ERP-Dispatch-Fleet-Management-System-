@@ -11,6 +11,6 @@ public interface FlatRepository extends JpaRepository<Flat, Long> {
 
     Optional<Flat> findByFlatNumber(String flatNumber);
     Optional<Flat> findByFlatNumberAndFloor_FloorId(String flatNumber, Long floorId);
-
+    
 
 }

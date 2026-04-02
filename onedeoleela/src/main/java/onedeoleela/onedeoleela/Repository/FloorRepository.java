@@ -12,9 +12,18 @@ import java.util.Optional;
 
 public interface FloorRepository extends JpaRepository<Floor, Long> {
     Optional<Floor> findByFloorNumber(Integer floorNumber);
-    List<Floor> findByProject_ProjectId(Long projectId);
-    @Query("SELECT MAX(f.floorNumber) FROM Floor f WHERE f.project.projectId = :projectId")
-    Integer findMaxFloorNumberByProjectId(@Param("projectId") Long projectId);
-    Optional<Floor> findByFloorNumberAndProject_ProjectId(Integer floorNumber, Long projectId);
+
+
+    List<Floor> findByTower_TowerId(Long towerId);
+    Optional<Floor> findByFloorNumberAndTower_TowerId(Integer floorNumber, Long towerId);
+
+
+    @Query("SELECT MAX(f.floorNumber) FROM Floor f WHERE f.tower.towerId = :towerId")
+    Integer findMaxFloorNumberByTowerId(Long towerId);
+
+
+    Optional<Floor> findFirstByTower_TowerId(Long towerId);
+
+
 
 }

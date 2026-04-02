@@ -20,7 +20,7 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> findAllByOrderByTripDateDesc();
 
     List<Trip> findByStatus(TripStatusEnum status);
-
+    List<Trip> findByStatusNotIn(List<TripStatusEnum> statuses);
     List<Trip> findByDriverECode(Integer driverECode);
 
     List<Trip> findByDriverECodeAndTripDateBetween(

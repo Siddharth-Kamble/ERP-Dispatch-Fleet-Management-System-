@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -114,11 +115,19 @@ public class TripService {
 
     // ================= ACTIVE VEHICLES =================
 
+
     public List<String> getActiveVehicles() {
 
-        return tripRepo.findByStatus(TripStatusEnum.ASSIGNED)
+        List<TripStatusEnum> excludedStatuses = List.of(
+                TripStatusEnum.CANCELLED,
+                TripStatusEnum.RETURN_JOURNEY_COMPLETED
+        );
+
+        return tripRepo.findByStatusNotIn(excludedStatuses)
                 .stream()
                 .map(Trip::getVehicleNumber)
+                .filter(Objects::nonNull)
+                .map(v -> v.trim().toUpperCase()) // optional but recommended
                 .distinct()
                 .collect(Collectors.toList());
     }
@@ -156,28 +165,6 @@ public class TripService {
 
         tripRepo.save(trip);
     }
-//    public List<Trip> getTripsForDriverToday(Integer driverECode) {
-//        LocalDate today = LocalDate.now();
-//        LocalDateTime startOfDay = today.atStartOfDay();
-//        LocalDateTime startOfTomorrow = today.plusDays(1).atStartOfDay();
-//
-//        // Fetch all trips for today
-//        List<Trip> tripsToday = tripRepo.findByDriverECodeAndTripDateBetween(driverECode, startOfDay, startOfTomorrow);
-//
-//        // Get trip IDs
-//        List<Long> tripIds = tripsToday.stream().map(Trip::getId).toList();
-//
-//        // Fetch VehicleActivityTrack entries for these trips
-//
-//
-//        List<VehicleActivityTrack> activities = vehicleActivityTrackRepo.findByTripIdIn(tripIds);
-//
-//        // Remove trips that already have activity entries
-//        List<Long> tripsWithActivity = activities.stream().map(VehicleActivityTrack::getTripId).toList();
-//        tripsToday.removeIf(trip -> tripsWithActivity.contains(trip.getId()));
-//
-//        return tripsToday;
-//    }
 
     public List<Trip> getTripsForDriverToday(Integer driverECode) {
         LocalDate today = LocalDate.now();

@@ -3,18 +3,24 @@
 
 
     import onedeoleela.onedeoleela.Entity.ProjectLog;
+    import onedeoleela.onedeoleela.Entity.Window;
     import onedeoleela.onedeoleela.Repository.ProjectLogRepository;
+    import onedeoleela.onedeoleela.Repository.WindowRepository;
     import org.springframework.stereotype.Service;
 
+    import java.time.LocalDateTime;
+    import java.util.HashMap;
     import java.util.List;
+    import java.util.Map;
 
     @Service
     public class ProjectLogService {
 
         private final ProjectLogRepository projectLogRepository;
-
-        public ProjectLogService(ProjectLogRepository projectLogRepository) {
+        private final WindowRepository windowRepository;
+        public ProjectLogService(ProjectLogRepository projectLogRepository, WindowRepository windowRepository) {
             this.projectLogRepository = projectLogRepository;
+            this.windowRepository = windowRepository;
         }
 
         public ProjectLog saveLog(ProjectLog log){
@@ -30,5 +36,42 @@
         }
         public List<ProjectLog> getLogsByProjectName(String projectName){
             return projectLogRepository.findByProjectNameOrderByCreatedAtDesc(projectName);
+        }
+
+
+        public Map<String, Object> getTripDates(Long tripId) {
+
+            Map<String, Object> response = new HashMap<>();
+
+            ProjectLog log = projectLogRepository.findTopByTripIdOrderByIdDesc(tripId);
+            List<Window> windows = windowRepository.findWindowsByTripId(tripId);
+
+            String userDate = null;
+            String actualDate = null;
+            boolean sameDate = true;
+
+            // userDate
+            if (log != null && log.getUserDate() != null) {
+                userDate = log.getUserDate().toString();
+            }
+
+            // actualDate
+            if (windows != null && !windows.isEmpty()) {
+                LocalDateTime created = windows.get(0).getCreatedAt();
+                if (created != null) {
+                    actualDate = created.toLocalDate().toString();
+                }
+            }
+
+            // compare
+            if (userDate != null && actualDate != null) {
+                sameDate = userDate.equals(actualDate);
+            }
+
+            response.put("userDate", userDate);
+            response.put("actualDate", actualDate);
+            response.put("sameDate", sameDate);
+
+            return response;
         }
     }

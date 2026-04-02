@@ -1,543 +1,3 @@
-////import React, { useState } from "react";
-////import axios from "axios";
-////
-////const FLOOR_API = "http://localhost:8080/floors";
-////const FLAT_API = "http://localhost:8080/flats";
-////
-////const FloorFlatManager = () => {
-////  const [projectName, setProjectName] = useState("");
-////  const [projectId, setProjectId] = useState(null);
-////
-////  const [floors, setFloors] = useState([]);
-////  const [selectedFloorId, setSelectedFloorId] = useState(null);
-////
-////  const [flats, setFlats] = useState([]);
-////  const [flatNumber, setFlatNumber] = useState("");
-////
-////  // ✅ Get Project ID
-////  const fetchProjectId = async () => {
-////    const res = await axios.get(`${FLOOR_API}/projectId/${projectName}`);
-////    setProjectId(res.data);
-////
-////    if (res.data !== 0) {
-////      loadFloors(res.data);
-////    } else {
-////      alert("Project not found ❌");
-////    }
-////  };
-////
-////  // ✅ Load Floors
-////  const loadFloors = async (id) => {
-////    const res = await axios.get(`${FLOOR_API}/project/${id}`);
-////    setFloors(res.data);
-////  };
-////
-////  // ✅ Select Floor + Load Flats
-////  const handleSelectFloor = async (floorId) => {
-////    setSelectedFloorId(floorId);
-////
-////    const res = await axios.get(`${FLAT_API}/floor/${floorId}`);
-////    setFlats(res.data);
-////  };
-////
-////  // ✅ Add Flat
-////  const handleAddFlat = async (e) => {
-////    e.preventDefault();
-////
-////    if (!selectedFloorId) {
-////      alert("Select a floor first ❗");
-////      return;
-////    }
-////
-////    const flatData = {
-////      flatNumber: flatNumber,
-////    };
-////
-////    await axios.post(`${FLAT_API}/${selectedFloorId}`, flatData);
-////
-////    alert("Flat Added ✅");
-////    setFlatNumber("");
-////
-////    // reload flats
-////    handleSelectFloor(selectedFloorId);
-////  };
-////
-////  return (
-////    <div style={{ padding: "20px" }}>
-////      <h2>🏢 Floor & Flat Allocation</h2>
-////
-////      {/* PROJECT */}
-////      <input
-////        placeholder="Enter Project Name"
-////        value={projectName}
-////        onChange={(e) => setProjectName(e.target.value)}
-////      />
-////      <button onClick={fetchProjectId}>Load Project</button>
-////
-////      <hr />
-////
-////      {/* FLOORS */}
-////      <h3>Floors</h3>
-////      <ul>
-////        {floors.map((f) => (
-////          <li key={f.floorId}>
-////            Floor {f.floorNumber}
-////            <button onClick={() => handleSelectFloor(f.floorId)}>
-////              View Flats
-////            </button>
-////          </li>
-////        ))}
-////      </ul>
-////
-////      <hr />
-////
-////      {/* FLATS */}
-////      {selectedFloorId && (
-////        <>
-////          <h3>Flats (Floor ID: {selectedFloorId})</h3>
-////
-////          <form onSubmit={handleAddFlat}>
-////            <input
-////              placeholder="Flat Number (e.g. F101)"
-////              value={flatNumber}
-////              onChange={(e) => setFlatNumber(e.target.value)}
-////              required
-////            />
-////            <button type="submit">Add Flat</button>
-////          </form>
-////
-////          <ul>
-////            {flats.map((f) => (
-////              <li key={f.flatId}>{f.flatNumber}</li>
-////            ))}
-////          </ul>
-////        </>
-////      )}
-////    </div>
-////  );
-////};
-////
-////export default FloorFlatManager;
-//
-//import React, { useState } from "react";
-//import axios from "axios";
-//
-//const PROJECT_API = "http://localhost:8080/projects";
-//const FLOOR_API = "http://localhost:8080/floors";
-//const FLAT_API = "http://localhost:8080/flats";
-//
-//const FloorFlatManager = () => {
-//  const [projects, setProjects] = useState([]);
-//  const [projectId, setProjectId] = useState(null);
-//
-//  const [floors, setFloors] = useState([]);
-//  const [selectedFloorId, setSelectedFloorId] = useState(null);
-//
-//  const [flats, setFlats] = useState([]);
-//  const [flatNumber, setFlatNumber] = useState("");
-//
-//  const [showDropdown, setShowDropdown] = useState(false);
-//
-//  // ✅ Load all projects (from your API)
-//  const loadProjects = async () => {
-//    try {
-//      const res = await axios.get(PROJECT_API);
-//      setProjects(res.data);
-//      setShowDropdown(true);
-//    } catch (err) {
-//      console.error(err);
-//    }
-//  };
-//
-//  // ✅ When user selects project
-//  const handleSelectProject = async (id) => {
-//    setProjectId(id);
-//    setShowDropdown(false);
-//
-//    loadFloors(id);
-//  };
-//
-//  // ✅ Load Floors
-//  const loadFloors = async (id) => {
-//    const res = await axios.get(`${FLOOR_API}/project/${id}`);
-//    setFloors(res.data);
-//  };
-//
-//  // ✅ Select Floor + Load Flats
-//  const handleSelectFloor = async (floorId) => {
-//    setSelectedFloorId(floorId);
-//
-//    const res = await axios.get(`${FLAT_API}/floor/${floorId}`);
-//    setFlats(res.data);
-//  };
-//
-//  // ✅ Add Flat
-//  const handleAddFlat = async (e) => {
-//    e.preventDefault();
-//
-//    if (!selectedFloorId) {
-//      alert("Select a floor first ❗");
-//      return;
-//    }
-//
-//    const flatData = {
-//      flatNumber: flatNumber,
-//    };
-//
-//    await axios.post(`${FLAT_API}/${selectedFloorId}`, flatData);
-//
-//    alert("Flat Added ✅");
-//    setFlatNumber("");
-//
-//    handleSelectFloor(selectedFloorId);
-//  };
-//
-//  return (
-//    <div style={{ padding: "20px" }}>
-//      <h2>🏢 Floor & Flat Allocation</h2>
-//
-//      {/* LOAD PROJECT BUTTON */}
-//      <button onClick={loadProjects}>Load Projects</button>
-//
-//      {/* DROPDOWN */}
-//      {showDropdown && (
-//        <div>
-//          <h4>Select Project</h4>
-//          <select onChange={(e) => handleSelectProject(e.target.value)}>
-//            <option value="">-- Select Project --</option>
-//            {projects.map((p) => (
-//              <option key={p.projectId} value={p.projectId}>
-//                {p.projectName}
-//              </option>
-//            ))}
-//          </select>
-//        </div>
-//      )}
-//
-//      {projectId && <p>Selected Project ID: {projectId}</p>}
-//
-//      <hr />
-//
-//      {/* FLOORS */}
-//      <h3>Floors</h3>
-//      <ul>
-//        {floors.map((f) => (
-//          <li key={f.floorId}>
-//            Floor {f.floorNumber}
-//            <button onClick={() => handleSelectFloor(f.floorId)}>
-//              View Flats
-//            </button>
-//          </li>
-//        ))}
-//      </ul>
-//
-//      <hr />
-//
-//      {/* FLATS */}
-//      {selectedFloorId && (
-//        <>
-//          <h3>Flats (Floor ID: {selectedFloorId})</h3>
-//
-//          <form onSubmit={handleAddFlat}>
-//            <input
-//              placeholder="Flat Number (e.g. F101)"
-//              value={flatNumber}
-//              onChange={(e) => setFlatNumber(e.target.value)}
-//              required
-//            />
-//            <button type="submit">Add Flat</button>
-//          </form>
-//
-//          <ul>
-//            {flats.map((f) => (
-//              <li key={f.flatId}>{f.flatNumber}</li>
-//            ))}
-//          </ul>
-//        </>
-//      )}
-//    </div>
-//  );
-//};
-//
-//export default FloorFlatManager;
-
-//import React, { useState } from "react";
-//import axios from "axios";
-//
-//const PROJECT_API = "http://localhost:8080/projects";
-//const FLOOR_API = "http://localhost:8080/floors";
-//const FLAT_API = "http://localhost:8080/flats";
-//
-//const FloorFlatManager = () => {
-//  const [projects, setProjects] = useState([]);
-//  const [projectId, setProjectId] = useState("");
-//
-//  const [floors, setFloors] = useState([]);
-//  const [selectedFloorId, setSelectedFloorId] = useState("");
-//
-//  const [flats, setFlats] = useState([]);
-//  const [flatName, setFlatName] = useState("");
-//
-//  // ✅ Load Projects
-//  const loadProjects = async () => {
-//    const res = await axios.get(PROJECT_API);
-//    setProjects(res.data);
-//  };
-//
-//  // ✅ Load Floors
-//  const loadFloors = async (projectId) => {
-//    const res = await axios.get(`${FLOOR_API}/project/${projectId}`);
-//    setFloors(res.data);
-//  };
-//
-//  // ✅ When Project Selected
-//  const handleProjectChange = (id) => {
-//    setProjectId(id);
-//    loadFloors(id);
-//  };
-//
-//  // ✅ Select Floor
-//  const handleSelectFloor = async (floorId) => {
-//    setSelectedFloorId(floorId);
-//
-//    const res = await axios.get(`${FLAT_API}/floor/${floorId}`);
-//    setFlats(res.data);
-//  };
-//
-//  // ✅ Add Flat (Manual Name)
-//  const handleAddFlat = async (e) => {
-//    e.preventDefault();
-//
-//    if (!flatName) {
-//      alert("Enter flat name ❗");
-//      return;
-//    }
-//
-//    await axios.post(`${FLAT_API}/floor/${selectedFloorId}`, {
-//      flatNumber: flatName,
-//    });
-//
-//    setFlatName("");
-//    handleSelectFloor(selectedFloorId);
-//  };
-//
-//  return (
-//    <div style={{ padding: "20px" }}>
-//      <h2>🏢 Manual Flat Allocation</h2>
-//
-//      {/* PROJECT */}
-//      <button onClick={loadProjects}>Load Projects</button>
-//
-//      <select onChange={(e) => handleProjectChange(e.target.value)}>
-//        <option value="">-- Select Project --</option>
-//        {projects.map((p) => (
-//          <option key={p.projectId} value={p.projectId}>
-//            {p.projectName}
-//          </option>
-//        ))}
-//      </select>
-//
-//      <hr />
-//
-//      {/* FLOORS */}
-//      <h3>Floors</h3>
-//      <ul>
-//        {floors.map((f) => (
-//          <li key={f.floorId}>
-//            Floor {f.floorNumber}
-//            <button onClick={() => handleSelectFloor(f.floorId)}>
-//              Select
-//            </button>
-//          </li>
-//        ))}
-//      </ul>
-//
-//      <hr />
-//
-//      {/* FLATS */}
-//      {selectedFloorId && (
-//        <>
-//          <h3>Flats (Floor ID: {selectedFloorId})</h3>
-//
-//          <form onSubmit={handleAddFlat}>
-//            <input
-//              placeholder="Enter Flat Name (e.g. A-101)"
-//              value={flatName}
-//              onChange={(e) => setFlatName(e.target.value)}
-//            />
-//            <button type="submit">Add Flat</button>
-//          </form>
-//
-//          <ul>
-//            {flats.map((f) => (
-//              <li key={f.flatId}>{f.flatNumber}</li>
-//            ))}
-//          </ul>
-//        </>
-//      )}
-//    </div>
-//  );
-//};
-//
-//export default FloorFlatManager;
-
-//    import React, { useState } from "react";
-//    import axios from "axios";
-//
-//    const PROJECT_API = "http://localhost:8080/projects";
-//    const FLOOR_API = "http://localhost:8080/floors";
-//    const FLAT_API = "http://localhost:8080/flats";
-//
-//    const FloorFlatManager = () => {
-//      const [projects, setProjects] = useState([]);
-//      const [projectId, setProjectId] = useState("");
-//
-//      const [floors, setFloors] = useState([]);
-//      const [floorNumber, setFloorNumber] = useState("");
-//
-//      const [selectedFloorId, setSelectedFloorId] = useState("");
-//      const [flats, setFlats] = useState([]);
-//      const [flatName, setFlatName] = useState("");
-//
-//      // ✅ Load Projects
-//      const loadProjects = async () => {
-//        const res = await axios.get(PROJECT_API);
-//        setProjects(res.data);
-//      };
-//
-//      // ✅ Load Floors
-//      const loadFloors = async (projectId) => {
-//        const res = await axios.get(`${FLOOR_API}/project/${projectId}`);
-//        setFloors(res.data);
-//      };
-//
-//      // ✅ Select Project
-//      const handleProjectChange = (id) => {
-//        setProjectId(id);
-//        loadFloors(id);
-//        setSelectedFloorId("");
-//        setFlats([]);
-//      };
-//
-//      // ✅ Add Floor
-//      const handleAddFloor = async (e) => {
-//        e.preventDefault();
-//
-//        if (!floorNumber) {
-//          alert("Enter floor number ❗");
-//          return;
-//        }
-//
-//        await axios.post(`${FLOOR_API}/project/${projectId}`, {
-//          floorNumber: floorNumber,
-//        });
-//
-//        setFloorNumber("");
-//        loadFloors(projectId);
-//      };
-//
-//      // ✅ Select Floor
-//      const handleSelectFloor = async (floorId) => {
-//        setSelectedFloorId(floorId);
-//
-//        const res = await axios.get(`${FLAT_API}/floor/${floorId}`);
-//        setFlats(res.data);
-//      };
-//
-//      // ✅ Add Flat
-//      const handleAddFlat = async (e) => {
-//        e.preventDefault();
-//
-//        if (!flatName) {
-//          alert("Enter flat name ❗");
-//          return;
-//        }
-//
-//        await axios.post(`${FLAT_API}/floor/${selectedFloorId}`, {
-//          flatNumber: flatName,
-//        });
-//
-//        setFlatName("");
-//        handleSelectFloor(selectedFloorId);
-//      };
-//
-//      return (
-//        <div style={{ padding: "20px" }}>
-//          <h2>🏢 Floor & Flat Management</h2>
-//
-//          {/* PROJECT */}
-//          <button onClick={loadProjects}>Load Projects</button>
-//
-//          <select onChange={(e) => handleProjectChange(e.target.value)}>
-//            <option value="">-- Select Project --</option>
-//            {projects.map((p) => (
-//              <option key={p.projectId} value={p.projectId}>
-//                {p.projectName}
-//              </option>
-//            ))}
-//          </select>
-//
-//          <hr />
-//
-//          {/* ADD FLOOR */}
-//          {projectId && (
-//            <>
-//              <h3>Add Floor</h3>
-//              <form onSubmit={handleAddFloor}>
-//                <input
-//                  type="number"
-//                  placeholder="Enter Floor Number (e.g. 1)"
-//                  value={floorNumber}
-//                  onChange={(e) => setFloorNumber(e.target.value)}
-//                />
-//                <button type="submit">Add Floor</button>
-//              </form>
-//
-//              <hr />
-//
-//              {/* FLOOR LIST */}
-//              <h3>Floors</h3>
-//              <ul>
-//                {floors.map((f) => (
-//                  <li key={f.floorId}>
-//                    Floor {f.floorNumber}
-//                    <button onClick={() => handleSelectFloor(f.floorId)}>
-//                      Manage Flats
-//                    </button>
-//                  </li>
-//                ))}
-//              </ul>
-//            </>
-//          )}
-//
-//          <hr />
-//
-//          {/* ADD FLAT */}
-//          {selectedFloorId && (
-//            <>
-//              <h3>Flats (Floor ID: {selectedFloorId})</h3>
-//
-//              <form onSubmit={handleAddFlat}>
-//                <input
-//                  placeholder="Enter Flat Name (e.g. A-101)"
-//                  value={flatName}
-//                  onChange={(e) => setFlatName(e.target.value)}
-//                />
-//                <button type="submit">Add Flat</button>
-//              </form>
-//
-//              <ul>
-//                {flats.map((f) => (
-//                  <li key={f.flatId}>{f.flatNumber}</li>
-//                ))}
-//              </ul>
-//            </>
-//          )}
-//        </div>
-//      );
-//    };
-//
-//    export default FloorFlatManager;
 
 
 import React, { useState, useEffect } from "react";
@@ -548,16 +8,21 @@ import {
   FaDoorOpen,
   FaPlusCircle,
   FaSyncAlt,
-  FaChevronRight
+  FaChevronRight,
+  FaMonument
 } from "react-icons/fa";
 
 const PROJECT_API = "http://localhost:8080/projects";
+const TOWER_API = "http://localhost:8080/api/towers";
 const FLOOR_API = "http://localhost:8080/floors";
 const FLAT_API = "http://localhost:8080/flats";
 
 const FloorFlatManager = () => {
   const [projects, setProjects] = useState([]);
   const [projectId, setProjectId] = useState("");
+
+  const [towers, setTowers] = useState([]);
+  const [towerId, setTowerId] = useState("");
 
   const [floors, setFloors] = useState([]);
   const [floorNumber, setFloorNumber] = useState("");
@@ -580,10 +45,21 @@ const FloorFlatManager = () => {
     }
   };
 
-  const loadFloors = async (projectId) => {
+  const loadTowers = async (pId) => {
     try {
-      const res = await axios.get(`${FLOOR_API}/project/${projectId}`);
-      setFloors(res.data);
+      const res = await axios.get(`${TOWER_API}/project/${pId}`);
+      setTowers(res.data);
+    } catch (err) {
+      console.error("Error loading towers", err);
+    }
+  };
+
+  const loadFloors = async (tId) => {
+    try {
+      const res = await axios.get(`${FLOOR_API}/tower/${tId}`);
+      // Sorting floors by floorNumber so they appear in order (1, 2, 3...)
+      const sortedFloors = res.data.sort((a, b) => a.floorNumber - b.floorNumber);
+      setFloors(sortedFloors);
     } catch (err) {
       console.error("Error loading floors", err);
     }
@@ -591,22 +67,40 @@ const FloorFlatManager = () => {
 
   const handleProjectChange = (id) => {
     setProjectId(id);
-    loadFloors(id);
+    setTowerId("");
+    setTowers([]);
+    setFloors([]);
     setSelectedFloorId("");
     setFlats([]);
+    if (id) loadTowers(id);
+  };
+
+  const handleTowerChange = (id) => {
+    setTowerId(id);
+    setSelectedFloorId("");
+    setFlats([]);
+    if (id) loadFloors(id);
+    else setFloors([]);
   };
 
   const handleAddFloor = async (e) => {
     e.preventDefault();
-    if (!floorNumber) {
-      alert("Enter floor number ❗");
+    if (!floorNumber || !towerId) {
+      alert("Select a tower and enter floor number ❗");
       return;
     }
-    await axios.post(`${FLOOR_API}/project/${projectId}`, {
-      floorNumber: floorNumber,
-    });
-    setFloorNumber("");
-    loadFloors(projectId);
+    try {
+      await axios.post(`${FLOOR_API}/tower/${towerId}`, {
+        floorNumber: floorNumber,
+      });
+      setFloorNumber("");
+      loadFloors(towerId);
+    } catch (err) {
+      // PROPER EXCEPTION HANDLING: Catch the "Floor Already Exist" message
+      const errorMessage = err.response?.data || "Error adding floor";
+      alert(`❌ ${errorMessage}`);
+      console.error("Add Floor Error:", err);
+    }
   };
 
   const handleSelectFloor = async (floorId) => {
@@ -625,11 +119,18 @@ const FloorFlatManager = () => {
       alert("Enter flat name ❗");
       return;
     }
-    await axios.post(`${FLAT_API}/floor/${selectedFloorId}`, {
-      flatNumber: flatName,
-    });
-    setFlatName("");
-    handleSelectFloor(selectedFloorId);
+    try {
+      await axios.post(`${FLAT_API}/floor/${selectedFloorId}`, {
+        flatNumber: flatName,
+      });
+      setFlatName("");
+      handleSelectFloor(selectedFloorId);
+    } catch (err) {
+      // PROPER EXCEPTION HANDLING: Catch the "Flat already exists" message
+      const errorMessage = err.response?.data || "Error registering flat";
+      alert(`❌ ${errorMessage}`);
+      console.error("Add Flat Error:", err);
+    }
   };
 
   return (
@@ -641,7 +142,7 @@ const FloorFlatManager = () => {
             <FaBuilding style={{ marginRight: "12px", color: "#6366f1" }} />
             Floor & Flat Inventory
           </h1>
-          <p style={styles.subtitle}>Structure your property levels and units efficiently</p>
+          <p style={styles.subtitle}>Structure your property towers, levels and units efficiently</p>
         </div>
         <button style={styles.refreshBtn} onClick={loadProjects}>
           <FaSyncAlt /> Refresh Data
@@ -649,26 +150,45 @@ const FloorFlatManager = () => {
       </header>
 
       <div style={styles.mainGrid}>
-        {/* Left Column: Projects & Floors */}
+        {/* Left Column: Projects, Towers & Floors */}
         <div style={styles.column}>
           <section style={styles.card}>
-            <h3 style={styles.cardTitle}>1. Select Project</h3>
-            <div style={styles.selectWrapper}>
-              <select
-                style={styles.select}
-                onChange={(e) => handleProjectChange(e.target.value)}
-                value={projectId}
-              >
-                <option value="">Choose a construction project...</option>
-                {projects.map((p) => (
-                  <option key={p.projectId} value={p.projectId}>
-                    {p.projectName}
-                  </option>
-                ))}
-              </select>
+            <h3 style={styles.cardTitle}>1. Selection Hierarchy</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={styles.selectWrapper}>
+                <select
+                  style={styles.select}
+                  onChange={(e) => handleProjectChange(e.target.value)}
+                  value={projectId}
+                >
+                  <option value="">Choose a construction project...</option>
+                  {projects.map((p) => (
+                    <option key={p.projectId} value={p.projectId}>
+                      {p.projectName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {projectId && (
+                <div style={styles.selectWrapper}>
+                  <select
+                    style={{ ...styles.select, border: "1px solid #6366f1" }}
+                    onChange={(e) => handleTowerChange(e.target.value)}
+                    value={towerId}
+                  >
+                    <option value="">Select Tower...</option>
+                    {towers.map((t) => (
+                      <option key={t.towerId} value={t.towerId}>
+                        {t.towerName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
-            {projectId && (
+            {towerId && (
               <div style={{ marginTop: "25px" }}>
                 <h3 style={styles.cardTitle}>2. Add New Floor</h3>
                 <form onSubmit={handleAddFloor} style={styles.inlineForm}>
@@ -685,7 +205,7 @@ const FloorFlatManager = () => {
                 </form>
 
                 <div style={styles.listContainer}>
-                  <h4 style={styles.listTitle}>Available Floors</h4>
+                  <h4 style={styles.listTitle}>Available Floors in {towers.find(t => t.towerId == towerId)?.towerName}</h4>
                   {floors.length === 0 ? (
                     <p style={styles.emptyText}>No floors added yet.</p>
                   ) : (
@@ -723,7 +243,7 @@ const FloorFlatManager = () => {
             {!selectedFloorId ? (
               <div style={styles.placeholder}>
                 <FaDoorOpen style={styles.placeholderIcon} />
-                <p>Select a floor level from the left to manage individual flats or units.</p>
+                <p>Select a Tower and Floor level from the left to manage individual flats or units.</p>
               </div>
             ) : (
               <>
