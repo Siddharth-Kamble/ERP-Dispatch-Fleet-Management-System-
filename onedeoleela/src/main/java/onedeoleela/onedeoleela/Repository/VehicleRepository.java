@@ -21,6 +21,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
         WHERE v.eCode = :eCode
     """)
     List<Vehicle> findByeCodeWithDriver(@Param("eCode") Integer eCode);
-
+    List<Vehicle> findAllByOrderByVehicleNumberAsc();
     Optional<Vehicle> findByVehicleNumber(String vehicleNumber);
 }

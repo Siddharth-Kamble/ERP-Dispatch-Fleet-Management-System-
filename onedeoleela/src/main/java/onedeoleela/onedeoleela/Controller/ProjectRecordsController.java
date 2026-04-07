@@ -1,3 +1,4 @@
+
 package onedeoleela.onedeoleela.Controller;
 
 import onedeoleela.onedeoleela.Entity.ProjectRecords;
@@ -24,11 +25,20 @@ public class ProjectRecordsController {
 
     // Add new record
     @PostMapping("/{projectId}")
-    public ProjectRecords addRecord(
+    public ResponseEntity<?> addRecord(
             @PathVariable Long projectId,
             @RequestBody ProjectRecords record
     ) {
-        return recordsService.addRecord(projectId, record);
+
+        // ✅ Validation: user must send date
+        if (record.getRecordDate() == null) {
+            return ResponseEntity.badRequest().body("recordDate is required");
+        }
+
+        // ❌ No need to set day → handled in entity
+
+        ProjectRecords savedRecord = recordsService.addRecord(projectId, record);
+        return ResponseEntity.ok(savedRecord);
     }
 
     // Get all records for a project
@@ -43,9 +53,13 @@ public class ProjectRecordsController {
             @PathVariable Long projectId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        return ResponseEntity.ok(recordsService.getRecordsByProjectAndDate(projectId, startDate, endDate));
+
+        return ResponseEntity.ok(
+                recordsService.getRecordsByProjectAndDate(projectId, startDate, endDate)
+        );
     }
 
+    // Download PDF
     @GetMapping("/download-pdf")
     public ResponseEntity<byte[]> downloadPDF(
             @RequestParam("startDate") String startDate,

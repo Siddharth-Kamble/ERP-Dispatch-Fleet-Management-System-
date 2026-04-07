@@ -1,6 +1,5 @@
 
 
-
 package onedeoleela.onedeoleela.Service;
 
 import com.itextpdf.kernel.pdf.PdfDocument;
@@ -43,9 +42,8 @@ public class ProjectRecordsService {
 
         record.setProject(project);
 
-        LocalDate today = LocalDate.now();
-        record.setRecordDate(today);
-        record.setDayOfWeek(today.getDayOfWeek().name());
+        // ❌ REMOVED auto date & day logic
+        // ✅ Now date comes from user, day handled by entity (@PrePersist)
 
         // 🔥 IMPORTANT: Set relationship
         if (record.getMaterials() != null) {
@@ -66,6 +64,7 @@ public class ProjectRecordsService {
     public List<ProjectRecords> getRecordsByProjectAndDate(Long projectId, LocalDate startDate, LocalDate endDate) {
         return recordsRepository.findByProjectProjectIdAndRecordDateBetween(projectId, startDate, endDate);
     }
+
     public byte[] generateProjectHistoryPDF(LocalDate startDate, LocalDate endDate) throws Exception {
         List<ProjectRecords> records = recordsRepository.findByRecordDateBetween(startDate, endDate);
 
@@ -73,27 +72,23 @@ public class ProjectRecordsService {
         PdfWriter writer = new PdfWriter(baos);
         PdfDocument pdf = new PdfDocument(writer);
 
-        // Set to Landscape for better fit of the new column structure
         pdf.setDefaultPageSize(com.itextpdf.kernel.geom.PageSize.A4.rotate());
 
         Document document = new Document(pdf);
         document.setMargins(20, 20, 20, 20);
 
-        // Header Title
         DateTimeFormatter titleFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy");
         document.add(new Paragraph("Dispatch Report: " + startDate.format(titleFormatter) + " to " + endDate.format(titleFormatter))
                 .setBold().setFontSize(16));
 
-        // Updated column widths for the new sequence
-        // SrNo, Project, Sqft, JobCard, DC, Material/Qty, Vehicle, Day, Date, Remark
-        float[] columnWidths = {30f, 150f, 40f, 70f, 40f, 120f, 100f, 50f, 60f, 80f};
+        // ✅ Added Driver column
+        float[] columnWidths = {30f, 150f, 40f, 70f, 40f, 120f, 80f, 80f, 50f, 60f, 80f};
         Table table = new Table(columnWidths);
         table.setWidth(com.itextpdf.layout.properties.UnitValue.createPercentValue(100));
 
-        // Headers
         String[] headers = {
                 "Sr No", "Project Name", "Sqft-", "Job Card No", "DC No",
-                "Material and Quantity", "Vehicle / Driver", "Day", "Date", "Remark"
+                "Material and Quantity", "Vehicle", "Driver", "Day", "Date", "Remark"
         };
 
         for (String header : headers) {
@@ -102,7 +97,6 @@ public class ProjectRecordsService {
                     .setBackgroundColor(ColorConstants.LIGHT_GRAY));
         }
 
-        // Data Rows
         int srNo = 1;
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
@@ -113,20 +107,32 @@ public class ProjectRecordsService {
             table.addCell(new Cell().add(new Paragraph(r.getJobCardNo()).setFontSize(8)));
             table.addCell(new Cell().add(new Paragraph(r.getDcNo()).setFontSize(8)));
 
-            // --- Material and Quantity Logic ---
-            // This assumes you are storing materials as a List or a formatted String
-            // If it's the dynamic list from the frontend, we join them here
+//            String materialContent = "";
+//            if (r.getMaterials() != null) {
+//                materialContent = r.getMaterials().stream()
+//                        .map(m -> m.getMaterialName() + ": " + m.getQuantity())
+//                        .collect(Collectors.joining("\n"));
+//            }
             String materialContent = "";
             if (r.getMaterials() != null) {
                 materialContent = r.getMaterials().stream()
-                        .map(m -> m.getMaterialName() + ": " + m.getQuantity())
+                        .map(m -> {
+                            Double qty = m.getQuantity();
+
+                            String formattedQty = (qty % 1 == 0)
+                                    ? String.valueOf(qty.intValue())
+                                    : String.valueOf(qty);
+
+                            return m.getMaterialName() + ": " + formattedQty;
+                        })
                         .collect(Collectors.joining("\n"));
             }
             table.addCell(new Cell().add(new Paragraph(materialContent).setFontSize(8)));
 
+            // ✅ Vehicle & Driver separated
             table.addCell(new Cell().add(new Paragraph(r.getVehicleDriver()).setFontSize(8)));
+            table.addCell(new Cell().add(new Paragraph(r.getDriver()).setFontSize(8)));
 
-            // Day and Date columns
             table.addCell(new Cell().add(new Paragraph(r.getDayOfWeek()).setFontSize(8)));
             table.addCell(new Cell().add(new Paragraph(r.getRecordDate().format(dateFormatter)).setFontSize(8)));
 
@@ -137,5 +143,4 @@ public class ProjectRecordsService {
         document.close();
         return baos.toByteArray();
     }
-
 }

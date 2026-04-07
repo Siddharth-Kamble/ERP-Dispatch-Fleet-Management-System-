@@ -245,28 +245,6 @@ const WindowManager = () => {
      setLoading(false);
    }
  };
-
-
-//  const submitProjectLog = async () => {
-//    try {
-//      if (!dispatchDetails.projectName || !dispatchDetails.tripId) {
-//        alert("Please enter both Project Name and Trip ID");
-//        return;
-//      }
-//      const payload = {
-//        ...dispatchDetails,
-//        tripId: parseInt(dispatchDetails.tripId),
-//        tower: {
-//            towerId: Number(dispatchDetails.towerId)
-//          },
-//      };
-//      await axios.post(`${API_URL}/logs`, payload);
-//      alert("Project Log Submitted Successfully!");
-//    } catch (error) {
-//      alert("Failed to submit project log");
-//    }
-//  };
-
   const createWindow = async () => {
     try {
       if (!dispatchDetails?.tripId || !flatNumber) {
@@ -298,20 +276,10 @@ const WindowManager = () => {
       alert(`Error: ${error.response?.data?.message || "Check Console"}`);
     }
   };
-
-
-
-
-
-
 const formatDate = (dateStr) => {
   if (!dateStr) return null;
   return new Date(dateStr).toLocaleDateString("en-IN");
 };
-
-
-
-
 const downloadPDF = async () => {
   const tripInput = prompt("Enter Trip ID (optional):")?.trim();
   let filteredWindows = windows;

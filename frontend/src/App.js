@@ -30,6 +30,7 @@ import WindowManagerPage from "./Module/Dispatch/Pages/WindowManagerPage";
 import BulkUploadWindowPage from "./Module/Dispatch/Pages/BulkUploadWindowPage"; // adjust path if needed
 import ItemDCPage from "./Module/Dispatch/Pages/ItemDCPage";
 import DispatchReport from "./Module/Dispatch/Pages/DispatchReport";
+import DailyReports from "./Module/Dispatch/Pages/DailyReports";
 // Other Dashboards
 import ProductionDashboard from "./pages/ProductionDashbaord";
 import SiteSupervisorDashboard from "./pages/SiteSupervisorDashboard";
@@ -90,6 +91,8 @@ function App() {
                      path="/dispatch-dashboard/dispatch-report"
                      element={<DispatchReport/>}
                    />
+                   <Route path="daily-reports" element={<DailyReports />} />
+
                 </Route>
 
                 {/* Other Dashboards */}

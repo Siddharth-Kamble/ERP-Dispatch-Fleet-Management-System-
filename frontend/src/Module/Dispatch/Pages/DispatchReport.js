@@ -1,21 +1,23 @@
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 const DispatchManager = () => {
-  // States for Adding Record
+
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState("");
 
-  // Dynamic Materials State
-  const [materials, setMaterials] = useState([{ materialName: "", quantity: "" }]);
 
+  const [materials, setMaterials] = useState([{ materialName: "", quantity: "" }]);
+   const [vehicles, setVehicles] = useState([]);   // ✅ NEW
+   const [drivers, setDrivers] = useState([]);
   const [formData, setFormData] = useState({
     sqft: "",
     jobCardNo: "",
     dcNo: "",
     remark: "",
     vehicleDriver: "",
+     driver: "",        // ✅ NEW
+      recordDate: ""
   });
 
   // States for Report
@@ -24,11 +26,20 @@ const DispatchManager = () => {
   const [loading, setLoading] = useState(false);
 
   // Load projects for the dropdown on mount
-  useEffect(() => {
-    axios.get("http://localhost:8080/projects")
-      .then(res => setProjects(res.data))
-      .catch(err => console.error("Error fetching projects", err));
-  }, []);
+useEffect(() => {
+  axios.get("http://localhost:8080/projects")
+    .then(res => setProjects(res.data))
+    .catch(err => console.error("Error fetching projects", err));
+
+  axios.get("http://localhost:8080/api/vehicles")
+    .then(res => setVehicles(res.data))
+    .catch(err => console.error("Error fetching vehicles", err));
+
+ axios.get("http://localhost:8080/api/drivers/names")
+   .then(res => setDrivers(res.data))
+         .catch(err => console.error("Error fetching drivers", err));
+
+}, []);
 
   // Handle changes for dynamic material rows
   const handleMaterialChange = (index, e) => {
@@ -55,19 +66,30 @@ const DispatchManager = () => {
   const handleAddRecord = async (e) => {
     e.preventDefault();
     if (!selectedProject) return alert("Select a Project");
+      if (!formData.recordDate) return alert("Select Date");
 
     // Combine form data with the dynamic materials list
-    const finalData = {
-      ...formData,
-      materials: materials
-    };
-
+   const finalData = {
+     ...formData,
+     materials: materials.map(m => ({
+       materialName: m.materialName,
+       quantity: Number(m.quantity)
+     }))
+   };
     try {
       setLoading(true);
       await axios.post(`http://localhost:8080/project-records/${selectedProject}`, finalData);
       alert("Record added successfully!");
       // Reset form and materials
-      setFormData({ sqft: "", jobCardNo: "", dcNo: "", remark: "", vehicleDriver: "" });
+     setFormData({
+       sqft: "",
+       jobCardNo: "",
+       dcNo: "",
+       remark: "",
+       vehicleDriver: "",
+       driver: "",
+       recordDate: ""
+     });
       setMaterials([{ materialName: "", quantity: "" }]);
       setSelectedProject("");
     } catch (error) {
@@ -126,7 +148,40 @@ const DispatchManager = () => {
               <input type="number" name="sqft" placeholder="Sqft" style={styles.input} value={formData.sqft} onChange={handleInputChange} />
               <input type="text" name="jobCardNo" placeholder="Job Card No" style={styles.input} value={formData.jobCardNo} onChange={handleInputChange} />
               <input type="text" name="dcNo" placeholder="DC No" style={styles.input} value={formData.dcNo} onChange={handleInputChange} />
-              <input type="text" name="vehicleDriver" placeholder="Vehicle/Driver" style={styles.input} value={formData.vehicleDriver} onChange={handleInputChange} />
+<select
+   name="vehicleDriver"
+  style={styles.input}
+  value={formData.vehicleDriver}
+  onChange={handleInputChange}
+>
+  <option value="">Select Vehicle</option>
+  {vehicles.map(v => (
+    <option key={v.id} value={v.vehicleNumber}>
+      {v.vehicleNumber}
+    </option>
+  ))}
+</select>            <select
+                       name="driver"
+                       style={styles.input}
+                       value={formData.driver}
+                       onChange={handleInputChange}
+                     >
+                       <option value="">Select Driver</option>
+                       {drivers.map((d, index) => (
+                         <option key={index} value={d}>
+                           {d}
+                         </option>
+                       ))}
+                     </select>
+
+              <input
+                type="date"
+                name="recordDate"
+                style={styles.input}
+                value={formData.recordDate}
+                onChange={handleInputChange}
+              />
+
             </div>
 
             {/* DYNAMIC MATERIALS SECTION */}

@@ -1,3 +1,5 @@
+
+
 package onedeoleela.onedeoleela.Entity;
 
 import jakarta.persistence.*;
@@ -18,17 +20,30 @@ public class ProjectRecords {
 
     @ManyToOne
     @JoinColumn(name = "project_id", nullable = false)
-    private Project project; // existing Project entity
+    private Project project;
 
     private Double sqft;
     private String jobCardNo;
     private String dcNo;
     private String remark;
+
     private String vehicleDriver;
 
-    private LocalDate recordDate; // store actual date automatically
-    private String dayOfWeek;
+    private String driver; // ✅ added
+
+    private LocalDate recordDate; // ✅ user enters this
+
+    private String dayOfWeek; // ✅ auto-filled
 
     @OneToMany(mappedBy = "projectRecord", cascade = CascadeType.ALL)
-    private List<Material> materials;// store day automatically
+    private List<Material> materials;
+
+    // ✅ AUTO DAY LOGIC
+    @PrePersist
+    @PreUpdate
+    public void setDayFromDate() {
+        if (this.recordDate != null) {
+            this.dayOfWeek = this.recordDate.getDayOfWeek().toString();
+        }
+    }
 }

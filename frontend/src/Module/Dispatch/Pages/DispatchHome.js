@@ -166,6 +166,22 @@ function DispatchHome() {
                 },
     ];
 
+    const dailyReportCards = [
+        {
+            title: "Daily Progress Reports",
+            icon: <FaListAlt />,   // you can change icon if needed
+            color: "#10b981",      // green shade (you can customize)
+            onClick: () => navigate("/dispatch-dashboard/daily-reports"),
+        },
+    ];
+      const reportCards = [
+              {
+                  title: "Dispatch Report",
+                  icon: <FaListAlt />,
+                  color: "#2563eb",
+                  onClick: () => navigate("/dispatch-dashboard/dispatch-report"),
+              },
+          ];
     const requisitionCards = [
         {
             title: "Create Requisition",
@@ -222,14 +238,7 @@ function DispatchHome() {
             },
         ];
 
-        const reportCards = [
-            {
-                title: "Dispatch Report",
-                icon: <FaListAlt />,
-                color: "#2563eb",
-                onClick: () => navigate("/dispatch-dashboard/dispatch-report"),
-            },
-        ];
+
 
 
     /* ================= UI ================= */
@@ -299,14 +308,15 @@ function DispatchHome() {
 
                             <Section title="Trip Management" cards={tripCards} />
                             <Section title="Driver Challan" cards={windowCards} />
-
+                             <Section title="Daily Reports" cards={dailyReportCards} />
+                              <Section title="Reports" cards={reportCards} />
                             <Section title="Requisition Planning" cards={requisitionCards} />
 
                             <Section title="Management" cards={managementCards} />
 
                             <Section title="Vehicle Monitoring" cards={healthCards} />
                             <Section title="Vehicle Portal Management" cards={portalCards} />
-                            <Section title="Reports" cards={reportCards} />
+
 
                         </div>
                     ) : (

@@ -31,7 +31,10 @@ public class DriverController {
                          @RequestBody Driver d) {
         return service.update(id, d);
     }
-
+    @GetMapping("/names")
+    public List<String> getDriverNames() {
+        return service.getAllDriverNames();
+    }
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
         service.delete(id);

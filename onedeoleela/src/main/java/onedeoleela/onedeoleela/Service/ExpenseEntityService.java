@@ -25,10 +25,39 @@ public class ExpenseEntityService {
     }
 
     // ✅ Save expense with bill image
+//    public ExpenseEntity saveExpense(String vehicleNumber,
+//                                     String driverECode,
+//                                     ExpenseType type,
+//                                     Double amount,
+//                                     String description,
+//                                     LocalDate date,
+//                                     MultipartFile image) throws IOException {
+//
+//        ExpenseEntity expense = new ExpenseEntity();
+//
+//        expense.setVehicleNumber(vehicleNumber);
+//        expense.setDriverECode(driverECode);
+//        expense.setType(type);
+//        expense.setAmount(amount);
+//        expense.setDescription(description);
+//        expense.setDate(date);
+//
+//        // Save image if provided
+//        if (image != null && !image.isEmpty()) {
+//            expense.setFileName(image.getOriginalFilename());
+//            expense.setContentType(image.getContentType());
+//            expense.setImageData(image.getBytes());
+//        }
+//
+//        return expenseRepository.save(expense);
+//    }
+
     public ExpenseEntity saveExpense(String vehicleNumber,
                                      String driverECode,
                                      ExpenseType type,
                                      Double amount,
+                                     Double dieselLiter, // Added attribute
+                                     Double rate,        // Added attribute
                                      String description,
                                      LocalDate date,
                                      MultipartFile image) throws IOException {
@@ -39,6 +68,11 @@ public class ExpenseEntityService {
         expense.setDriverECode(driverECode);
         expense.setType(type);
         expense.setAmount(amount);
+
+        // Mapping the two new attributes
+        expense.setDieselLiter(dieselLiter);
+        expense.setRate(rate);
+
         expense.setDescription(description);
         expense.setDate(date);
 

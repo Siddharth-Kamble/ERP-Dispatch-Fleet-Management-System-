@@ -1,3 +1,5 @@
+
+
 package onedeoleela.onedeoleela.Util;
 
 import com.itextpdf.kernel.pdf.PdfWriter;
@@ -38,18 +40,23 @@ public class ExpensePdfGenerator {
         document.add(title);
 
         document.add(new Paragraph("Vehicle Number: " + vehicleNumber));
-        document.add(new Paragraph("Driver: " + driverName));
+       // document.add(new Paragraph("Driver: " + driverName));
         document.add(new Paragraph("\n"));
 
         // ===== TABLE =====
         Table table = new Table(UnitValue.createPercentArray(new float[]{
-                2,2,2,3,2,3
+                2,2,2,3,2,2,2,3   // ✅ UPDATED (added 2 columns)
         })).useAllAvailableWidth();
 
         table.addHeaderCell("Category");
         table.addHeaderCell("Date");
         table.addHeaderCell("Updated By");
         table.addHeaderCell("Description");
+
+        // ✅ NEW HEADERS
+        table.addHeaderCell("Rate");
+        table.addHeaderCell("Diesel Liter");
+
         table.addHeaderCell("Amount");
         table.addHeaderCell("Bill");
 
@@ -69,6 +76,16 @@ public class ExpensePdfGenerator {
                     e.getDescription() != null
                             ? e.getDescription()
                             : "-"
+            );
+
+            // ✅ RATE COLUMN
+            table.addCell(
+                    e.getRate() != null ? "₹ " + e.getRate() : "-"
+            );
+
+            // ✅ DIESEL LITER COLUMN
+            table.addCell(
+                    e.getDieselLiter() != null ? e.getDieselLiter() + " L" : "-"
             );
 
             table.addCell("₹ " + e.getAmount());

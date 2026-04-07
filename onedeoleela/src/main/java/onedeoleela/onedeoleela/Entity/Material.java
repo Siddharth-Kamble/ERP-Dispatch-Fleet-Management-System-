@@ -2,6 +2,7 @@ package onedeoleela.onedeoleela.Entity;
 
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,5 +21,6 @@ public class Material {
 
     @ManyToOne
     @JoinColumn(name = "project_record_id")
+    @JsonIgnore   // 🔥 THIS LINE FIXES EVERYTHING
     private ProjectRecords projectRecord;
 }

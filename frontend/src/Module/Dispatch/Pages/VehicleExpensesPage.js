@@ -40,7 +40,8 @@ function VehicleExpensesPage() {
                 date: new Date().toISOString().split('T')[0],
                 description: "",
                 kmReading: "",
-                dieselRate: ""
+                dieselRate: "",
+                dieselLiter: ""
             });
             setBillFile(null);
         }
@@ -123,78 +124,174 @@ function VehicleExpensesPage() {
         setAddModalOpen(true);
     };
 
-    const handleAddExpense = async (e) => {
-        e.preventDefault();
 
-        if (!selectedVehicle) {
-            alert("Please select a vehicle first.");
-            return;
-        }
+const handleAddExpense = async (e) => {
+    e.preventDefault();
 
-        try {
-            // 1️⃣ If FUEL, send to /api/vehicle-fuel/update
-            if (newExpense.type === "FUEL") {
-                const fuelData = {
-                    vehicleNumber: selectedVehicle.vehicleNumber,
-                    kmReading: parseFloat(newExpense.kmReading),
-                    dieselRate: parseFloat(newExpense.dieselRate),
-                    fuelAmount: parseFloat(newExpense.amount),
-                    updatedBy:   user?.eCode
-                };
+    if (!selectedVehicle) {
+        alert("Please select a vehicle first.");
+        return;
+    }
 
-                await axios.post(
-                    "http://localhost:8080/api/vehicle-fuel/update",
-                    fuelData
-                );
-            }
+    try {
 
-            // 2️⃣ Send to expenses table (for reporting)
-            const formData = new FormData();
-            formData.append("type", newExpense.type);
-            formData.append("amount", newExpense.amount);
-            formData.append("date", newExpense.date);
-            formData.append("description", newExpense.description);
-            formData.append("vehicleNumber", selectedVehicle.vehicleNumber);
-            formData.append("driverECode", user?.eCode);
-
-            if (newExpense.type === "FUEL" && newExpense.kmReading) {
-                formData.append("kmReading", newExpense.kmReading);
-            }
-            if (newExpense.type === "FUEL" && newExpense.dieselRate) {
-                formData.append("dieselRate", newExpense.dieselRate);
-            }
-            if (billFile) {
-                formData.append("image", billFile);
-            }
+        // ✅ 1. Fuel Table Update (UNCHANGED)
+        if (newExpense.type === "FUEL") {
+            const fuelData = {
+                vehicleNumber: selectedVehicle.vehicleNumber,
+                kmReading: parseFloat(newExpense.kmReading),
+                dieselRate: parseFloat(newExpense.dieselRate),
+                fuelAmount: parseFloat(newExpense.amount),
+                updatedBy: user?.eCode
+            };
 
             await axios.post(
-                "http://localhost:8080/api/expenses/add",
-                formData,
-                { headers: { "Content-Type": "multipart/form-data" } }
+                "http://localhost:8080/api/vehicle-fuel/update",
+                fuelData
             );
-
-            // ✅ Success notification
-            alert("Expense added successfully!");
-
-            // 3️⃣ Refresh expenses list
-            await fetchExpenses(selectedVehicle.vehicleNumber);
-
-            // 4️⃣ Reset modal and form
-            setAddModalOpen(false);
-            setBillFile(null);
-            setNewExpense({
-                type: "FUEL",
-                amount: "",
-                date: new Date().toISOString().split('T')[0],
-                description: "",
-                kmReading: "",
-                dieselRate: ""
-            });
-        } catch (err) {
-            console.error("Failed to add expense:", err);
-            alert("Error adding expense");
         }
-    };
+
+        // ✅ 2. Prepare FormData for Expense API
+        const formData = new FormData();
+
+        formData.append("vehicleNumber", selectedVehicle.vehicleNumber);
+        formData.append("driverECode", user?.eCode);
+        formData.append("type", newExpense.type);
+        formData.append("amount", parseFloat(newExpense.amount));
+        formData.append("date", newExpense.date);
+        formData.append("description", newExpense.description || "");
+
+        // ✅ 3. FUEL LOGIC (IMPORTANT FIX)
+        if (newExpense.type === "FUEL") {
+
+            const amount = parseFloat(newExpense.amount);
+            const rate = parseFloat(newExpense.dieselRate);
+
+            if (!rate || rate === 0) {
+                alert("Diesel rate must be greater than 0");
+                return;
+            }
+
+            const liters = amount / rate;
+
+            // ✔ Backend mapping
+            formData.append("rate", rate);                         // ✅ correct
+            formData.append("dieselLiter", liters.toFixed(2));     // ✅ correct
+        }
+
+        // ✅ 4. Image Upload
+        if (billFile) {
+            formData.append("image", billFile);
+        }
+
+        // ✅ 5. API Call
+        await axios.post(
+            "http://localhost:8080/api/expenses/add",
+            formData,
+            {
+                headers: {
+                    "Content-Type": "multipart/form-data"
+                }
+            }
+        );
+
+        // ✅ SUCCESS
+        alert("Expense added successfully! ✅");
+
+        await fetchExpenses(selectedVehicle.vehicleNumber);
+
+        setAddModalOpen(false);
+        setBillFile(null);
+
+        // Reset Form
+        setNewExpense({
+            type: "FUEL",
+            amount: "",
+            date: new Date().toISOString().split('T')[0],
+            description: "",
+            kmReading: "",
+            dieselRate: ""
+        });
+
+    } catch (err) {
+        console.error("Failed to add expense:", err);
+        alert("Error: " + (err.response?.data || "Check console"));
+    }
+};
+
+
+//    const handleAddExpense = async (e) => {
+//        e.preventDefault();
+//
+//        if (!selectedVehicle) {
+//            alert("Please select a vehicle first.");
+//            return;
+//        }
+//
+//        try {
+//            // 1️⃣ If FUEL, send to /api/vehicle-fuel/update
+//            if (newExpense.type === "FUEL") {
+//                const fuelData = {
+//                    vehicleNumber: selectedVehicle.vehicleNumber,
+//                    kmReading: parseFloat(newExpense.kmReading),
+//                    dieselRate: parseFloat(newExpense.dieselRate),
+//                    fuelAmount: parseFloat(newExpense.amount),
+//                    updatedBy:   user?.eCode
+//                };
+//
+//                await axios.post(
+//                    "http://localhost:8080/api/vehicle-fuel/update",
+//                    fuelData
+//                );
+//            }
+//
+//            // 2️⃣ Send to expenses table (for reporting)
+//            const formData = new FormData();
+//            formData.append("type", newExpense.type);
+//            formData.append("amount", newExpense.amount);
+//            formData.append("date", newExpense.date);
+//            formData.append("description", newExpense.description);
+//            formData.append("vehicleNumber", selectedVehicle.vehicleNumber);
+//            formData.append("driverECode", user?.eCode);
+//
+//            if (newExpense.type === "FUEL" && newExpense.kmReading) {
+//                formData.append("kmReading", newExpense.kmReading);
+//            }
+//            if (newExpense.type === "FUEL" && newExpense.dieselRate) {
+//                formData.append("dieselRate", newExpense.dieselRate);
+//            }
+//            if (billFile) {
+//                formData.append("image", billFile);
+//            }
+//
+//            await axios.post(
+//                "http://localhost:8080/api/expenses/add",
+//                formData,
+//                { headers: { "Content-Type": "multipart/form-data" } }
+//            );
+//
+//            // ✅ Success notification
+//            alert("Expense added successfully!");
+//
+//            // 3️⃣ Refresh expenses list
+//            await fetchExpenses(selectedVehicle.vehicleNumber);
+//
+//            // 4️⃣ Reset modal and form
+//            setAddModalOpen(false);
+//            setBillFile(null);
+//            setNewExpense({
+//                type: "FUEL",
+//                amount: "",
+//                date: new Date().toISOString().split('T')[0],
+//                description: "",
+//                kmReading: "",
+//                dieselRate: ""
+//            });
+//        } catch (err) {
+//            console.error("Failed to add expense:", err);
+//            alert("Error adding expense");
+//        }
+//    };
 
     /* ================= 4. DATA PROCESSING ================= */
     const filteredExpenses = expenses.filter((e) => {
@@ -503,6 +600,24 @@ function VehicleExpensesPage() {
                                     }
                                 />
                             </div>
+
+
+                    {newExpense.type === "FUEL" && (
+                      <div>
+                          <label className="form-label">Diesel Quantity (Liters)</label>
+                          <input
+                              type="number"
+                              placeholder="Enter Diesel Liters"
+                              className="date-input"
+                              style={{ width: "100%" }}
+                              value={newExpense.dieselLiter}
+                              onChange={(e) =>
+                                  setNewExpense({ ...newExpense, dieselLiter: e.target.value })
+                              }
+                          />
+                      </div>
+                    )}
+
 
                             {newExpense.kmReading && newExpense.dieselRate && (
                                 <p style={{ fontSize: "13px", color: "#475569", marginTop: "5px" }}>

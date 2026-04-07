@@ -39,6 +39,8 @@ public class ExpenseEntityController {
             @RequestParam String driverECode,
             @RequestParam ExpenseType type,
             @RequestParam Double amount,
+            @RequestParam(required = false) Double dieselLiter, // New Attribute
+            @RequestParam(required = false) Double rate,        // New Attribute
             @RequestParam(required = false) String description,
             @RequestParam String date,
             @RequestParam(required = false) MultipartFile image
@@ -51,6 +53,8 @@ public class ExpenseEntityController {
                     driverECode,
                     type,
                     amount,
+                    dieselLiter, // Passed to service
+                    rate,        // Passed to service
                     description,
                     LocalDate.parse(date),
                     image
