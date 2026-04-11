@@ -1,3 +1,6 @@
+
+
+
 package onedeoleela.onedeoleela.Controller;
 
 import onedeoleela.onedeoleela.Entity.ExpenseEntity;
@@ -25,7 +28,7 @@ import java.util.stream.Collectors;
 public class ExpenseEntityController {
 
     private final ExpenseEntityService expenseService;
-    private  final UserRepository userRepository;
+    private final UserRepository userRepository;
 
     public ExpenseEntityController(ExpenseEntityService expenseService, UserRepository userRepository) {
         this.expenseService = expenseService;
@@ -39,31 +42,26 @@ public class ExpenseEntityController {
             @RequestParam String driverECode,
             @RequestParam ExpenseType type,
             @RequestParam Double amount,
-            @RequestParam(required = false) Double dieselLiter, // New Attribute
-            @RequestParam(required = false) Double rate,        // New Attribute
+            @RequestParam(required = false) Double dieselLiter,
+            @RequestParam(required = false) Double rate,
             @RequestParam(required = false) String description,
             @RequestParam String date,
             @RequestParam(required = false) MultipartFile image
     ) {
-
         try {
-
             ExpenseEntity expense = expenseService.saveExpense(
                     vehicleNumber,
                     driverECode,
                     type,
                     amount,
-                    dieselLiter, // Passed to service
-                    rate,        // Passed to service
+                    dieselLiter,
+                    rate,
                     description,
                     LocalDate.parse(date),
                     image
             );
-
             return ResponseEntity.ok(expense);
-
         } catch (Exception e) {
-
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error saving expense: " + e.getMessage());
         }
@@ -74,17 +72,14 @@ public class ExpenseEntityController {
     public ResponseEntity<List<ExpenseEntity>> viewExpenses(
             @PathVariable String vehicleNumber,
             @RequestParam String eCode) {
-
         List<ExpenseEntity> history =
                 expenseService.getExpensesByDriverAndVehicle(eCode, vehicleNumber);
-
         return ResponseEntity.ok(history);
     }
 
     // ✅ Driver expense history
     @GetMapping("/driver/{eCode}")
     public ResponseEntity<List<ExpenseEntity>> getDriverHistory(@PathVariable String eCode) {
-
         return ResponseEntity.ok(
                 expenseService.getAllExpensesByDriver(eCode)
         );
@@ -93,22 +88,15 @@ public class ExpenseEntityController {
     // ✅ Vehicle expense list
     @GetMapping("/vehicle-number/{vehicleNumber}")
     public ResponseEntity<?> getExpensesByVehicleNumber(@PathVariable String vehicleNumber) {
-
         try {
-
             List<ExpenseEntity> expenses =
                     expenseService.getExpensesByVehicleNumberWithDriverName(vehicleNumber);
-
             if (expenses.isEmpty()) {
-
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body("No expenses found for vehicle number: " + vehicleNumber);
             }
-
             return ResponseEntity.ok(expenses);
-
         } catch (Exception e) {
-
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error fetching expenses: " + e.getMessage());
         }
@@ -117,35 +105,28 @@ public class ExpenseEntityController {
     @GetMapping("/vehicle/{vehicleNumber}")
     public ResponseEntity<List<ExpenseEntity>> getExpensesByVehicle(
             @PathVariable String vehicleNumber) {
-
         List<ExpenseEntity> expenses =
                 expenseService.getExpensesByVehicleNumber(vehicleNumber);
-
         return ResponseEntity.ok(expenses);
     }
+
     @GetMapping("/bill/{id}")
     public ResponseEntity<byte[]> getBillImage(@PathVariable Long id) {
-
         ExpenseEntity expense = expenseService.getExpenseById(id);
-
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(expense.getContentType()))
                 .body(expense.getImageData());
     }
 
-
-
-
-
-
+    // ✅ FIXED: Download now supports startDate, endDate AND type (category) filter
     @GetMapping("/download/{vehicleNumber}")
     public ResponseEntity<byte[]> downloadExpenseReport(
             @PathVariable String vehicleNumber,
             @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String type) {  // ✅ Added type param
 
         try {
-            // Convert startDate and endDate to LocalDate
             LocalDate start = (startDate != null && !startDate.isEmpty())
                     ? LocalDate.parse(startDate)
                     : LocalDate.of(1900, 1, 1);
@@ -153,11 +134,28 @@ public class ExpenseEntityController {
                     ? LocalDate.parse(endDate)
                     : LocalDate.of(2100, 1, 1);
 
+            // ✅ Parse ExpenseType safely (null = ALL)
+            ExpenseType expenseType = null;
+            if (type != null && !type.isEmpty() && !type.equalsIgnoreCase("ALL")) {
+                try {
+                    expenseType = ExpenseType.valueOf(type.toUpperCase());
+                } catch (IllegalArgumentException ex) {
+                    expenseType = null; // Unknown type → treat as ALL
+                }
+            }
+
+            final ExpenseType finalExpenseType = expenseType;
+
             List<ExpenseEntity> expenses = expenseService.findByVehicleNumber(vehicleNumber)
                     .stream()
                     .filter(e -> {
-                        LocalDate expenseDate = e.getDate(); // assuming e.getDate() is java.util.Date or java.time.LocalDateTime
-                        return !expenseDate.isBefore(start) && !expenseDate.isAfter(end);
+                        LocalDate expenseDate = e.getDate();
+                        boolean inRange = !expenseDate.isBefore(start) && !expenseDate.isAfter(end);
+
+                        // ✅ If type filter is set, also match the type
+                        boolean matchesType = (finalExpenseType == null) || e.getType() == finalExpenseType;
+
+                        return inRange && matchesType;
                     })
                     .collect(Collectors.toList());
 

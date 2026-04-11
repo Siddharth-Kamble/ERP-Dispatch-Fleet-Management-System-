@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
@@ -7,6 +8,7 @@ import axios from "axios";
 const API  = process.env.REACT_APP_API_URL || "";
 const BASE = `${API}/api/daily-progress-report`;
 const LOOK = `${API}/api/lookup`;
+
 
 const STATUS_META = {
   ACHIEVE:      { label: "ACHIEVE",      bg: "#16a34a", text: "#fff", dot: "#4ade80" },
@@ -91,21 +93,10 @@ const IChevron  = (p) => <Icon {...p} d="M6 9l6 6 6-6" />;
 const IUsers    = (p) => <Icon {...p} d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />;
 
 /* ─── MULTI-SELECT DROPDOWN COMPONENT ──────────────────────────────────── */
-/**
- * A custom multi-select dropdown that shows a list of users/items and lets
- * the user pick one or more. Selected values are joined with " & " for storage.
- *
- * Props:
- *   options  — array of { label, value } objects
- *   value    — current string value (joined), e.g. "RAJAN VERMA & AKHILESH"
- *   onChange — (newJoinedString) => void
- *   placeholder
- */
 function MultiSelectDropdown({ options, value, onChange, placeholder = "Select…" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  // Parse the current joined string back into a Set of selected values
   const selected = new Set(
     value ? value.split(" & ").map(s => s.trim()).filter(Boolean) : []
   );
@@ -117,7 +108,6 @@ function MultiSelectDropdown({ options, value, onChange, placeholder = "Select�
     onChange([...next].join(" & "));
   };
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", handler);
@@ -175,9 +165,9 @@ export default function DailyProgressReportPage() {
   const [specialNote,  setSpecialNote]  = useState("");
 
   /* ── lookup data for dropdowns ── */
-  const [dispatchUsers, setDispatchUsers] = useState([]); // role = DISPATCH
-  const [driverUsers,   setDriverUsers]   = useState([]); // role = DRIVER
-  const [vehicles,      setVehicles]      = useState([]); // all vehicles
+  const [dispatchUsers, setDispatchUsers] = useState([]);
+  const [driverUsers,   setDriverUsers]   = useState([]);
+  const [vehicles,      setVehicles]      = useState([]);
 
   /* ── ui state ── */
   const [loading,      setLoading]      = useState(false);
@@ -189,6 +179,8 @@ export default function DailyProgressReportPage() {
   const [saving,       setSaving]       = useState(false);
   const [toast,        setToast]        = useState(null);
   const [deleteId,     setDeleteId]     = useState(null);
+  // ✅ editId state
+  const [editId,       setEditId]       = useState(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
 
   const toastTimer = useRef(null);
@@ -196,7 +188,7 @@ export default function DailyProgressReportPage() {
   /* ── effects ── */
   useEffect(() => {
     fetchDates();
-    fetchLookups(); // load dropdown data once on mount
+    fetchLookups();
   }, []);
 
   useEffect(() => { if (selectedDate) fetchRows(); }, [selectedDate]);
@@ -236,39 +228,43 @@ export default function DailyProgressReportPage() {
     finally   { setLoading(false); }
   };
 
+  // ✅ handleSave handles both ADD and EDIT
   const handleSave = async () => {
-  if (
-    formData.targetAchieve === "OTHER" &&
-    !formData.targetAchieveOther?.trim()
-  ) {
-    showToast("Please enter custom status for OTHER", "error");
-    return;
-  }
+    if (formData.targetAchieve === "OTHER" && !formData.targetAchieveOther?.trim()) {
+      showToast("Please enter custom status for OTHER", "error");
+      return;
+    }
     setSaving(true);
     try {
-      // specialNote is NOT in formData — it lives at the page level
-      // and is attached separately so it doesn't appear in the form
-     await axios.post(BASE, {
-       ...formData,
-       reportDate: selectedDate,
-       specialNote,
+      const payload = {
+        ...formData,
+        reportDate: selectedDate,
+        specialNote,
+        targetAchieveOther:
+          formData.targetAchieve === "OTHER"
+            ? (formData.targetAchieveOther || "").trim()
+            : null,
+      };
 
-       // ✅ FIX: ensure DB constraint is satisfied
-       targetAchieveOther:
-         formData.targetAchieve === "OTHER"
-           ? (formData.targetAchieveOther || "").trim()
-           : null,
-     });
-      showToast("Trip row saved successfully", "success");
+      if (editId) {
+        await axios.put(`${BASE}/${editId}`, payload);
+        showToast("Trip row updated successfully", "success");
+      } else {
+        await axios.post(BASE, payload);
+        showToast("Trip row saved successfully", "success");
+      }
+
       setShowForm(false);
+      setEditId(null);
       setFormData({ ...EMPTY_ROW, reportDate: selectedDate });
       fetchRows();
       fetchDates();
     } catch (e) {
       const msg = e?.response?.data?.message || "Failed to save trip";
       showToast(msg, "error");
+    } finally {
+      setSaving(false);
     }
-    finally { setSaving(false); }
   };
 
   const handleDelete = async (id) => {
@@ -318,7 +314,29 @@ export default function DailyProgressReportPage() {
   const setField = (key, val) => setFormData(p => ({ ...p, [key]: val }));
 
   const openAddForm = () => {
+    setEditId(null);
     setFormData({ ...EMPTY_ROW, reportDate: selectedDate });
+    setShowForm(true);
+  };
+
+  // ✅ openEditForm — populates form with existing row data
+  const openEditForm = (row) => {
+    setEditId(row.id);
+    setFormData({
+      reportDate:         row.reportDate         || selectedDate,
+      employeeName:       row.employeeName        || "",
+      srNo:               row.srNo                || 1,
+      vehicleNumber:      row.vehicleNumber       || "",
+      tripNumber:         row.tripNumber          || 1,
+      driverName:         row.driverName          || "",
+      description:        row.description         || "",
+      fromLocation:       row.fromLocation        || "",
+      toLocation:         row.toLocation          || "",
+      timeSlot:           row.timeSlot            || "",
+      targetAchieve:      row.targetAchieve       || "PENDING",
+      targetAchieveOther: row.targetAchieveOther  || "",
+      remark:             row.remark              || "",
+    });
     setShowForm(true);
   };
 
@@ -432,7 +450,7 @@ export default function DailyProgressReportPage() {
         </span>
       </div>
 
-      {/* ══ SPECIAL NOTE — standalone section, NOT inside the modal ══ */}
+      {/* ══ SPECIAL NOTE ══ */}
       <div className="dpr-note-section">
         <div className="dpr-note-header">
           <span className="dpr-note-icon">📝</span>
@@ -519,8 +537,9 @@ export default function DailyProgressReportPage() {
             <table className="dpr-table">
               <thead>
                 <tr>
-                  {["SR","Vehicle","Trip","Driver","Description","From","To","Time","Target Achieve","Remark",""].map(h => (
-                    <th key={h}>{h}</th>
+                  {/* ✅ Added empty header for edit button column */}
+                  {["SR","Vehicle","Trip","Driver","Description","From","To","Time","Target Achieve","Remark","",""].map((h, i) => (
+                    <th key={i}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -536,9 +555,9 @@ export default function DailyProgressReportPage() {
                       <td><span className="dpr-vehicle-tag">{r.vehicleNumber || "—"}</span></td>
                       <td className="dpr-td-c">{r.tripNumber}</td>
                       <td className="dpr-td-driver">{r.driverName || "—"}</td>
-                     <td className="dpr-td-wrap">
-                       {(r.description || "—").replace(/(\d+)\.0\b/g, "$1")}
-                     </td>
+                      <td className="dpr-td-wrap">
+                        {(r.description || "—").replace(/(\d+)\.0\b/g, "$1")}
+                      </td>
                       <td className="dpr-td-loc">{r.fromLocation || "—"}</td>
                       <td className="dpr-td-loc">{r.toLocation   || "—"}</td>
                       <td className="dpr-td-time">
@@ -553,6 +572,19 @@ export default function DailyProgressReportPage() {
                         </span>
                       </td>
                       <td className="dpr-td-rem">{r.remark || "—"}</td>
+
+                      {/* ✅ EDIT BUTTON — between Remark and Delete */}
+                      <td>
+                        <button
+                          className="dpr-edit-btn"
+                          onClick={() => openEditForm(r)}
+                          title="Edit"
+                        >
+                          <Icon d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" size={13}/>
+                        </button>
+                      </td>
+
+                      {/* DELETE BUTTON */}
                       <td>
                         <button className="dpr-del-btn" onClick={() => setDeleteId(r.id)} title="Delete">
                           <ITrash size={13}/>
@@ -567,13 +599,15 @@ export default function DailyProgressReportPage() {
         )}
       </div>
 
-      {/* ══ ADD ROW MODAL ══ */}
+      {/* ══ ADD / EDIT ROW MODAL ══ */}
       {showForm && (
-        <div className="dpr-overlay" onClick={() => setShowForm(false)}>
+        <div className="dpr-overlay" onClick={() => { setShowForm(false); setEditId(null); }}>
           <div className="dpr-modal" onClick={e => e.stopPropagation()}>
             <div className="dpr-modal-hd">
-              <span className="dpr-modal-title">Add Trip Row</span>
-              <button className="dpr-modal-x" onClick={() => setShowForm(false)}><IClose size={15}/></button>
+              {/* ✅ Dynamic title */}
+              <span className="dpr-modal-title">{editId ? "Edit Trip Row" : "Add Trip Row"}</span>
+              {/* ✅ X button resets editId */}
+              <button className="dpr-modal-x" onClick={() => { setShowForm(false); setEditId(null); }}><IClose size={15}/></button>
             </div>
             <div className="dpr-modal-bd">
               <div className="dpr-form-grid">
@@ -596,7 +630,7 @@ export default function DailyProgressReportPage() {
                   />
                 </div>
 
-                {/* ── Employee Name — multi-select from DISPATCH users ── */}
+                {/* Employee Name */}
                 <div className="dpr-field dpr-field-full">
                   <label className="dpr-label">
                     <IUsers size={11}/> Employee Name
@@ -610,7 +644,7 @@ export default function DailyProgressReportPage() {
                   />
                 </div>
 
-                {/* ── Vehicle Number — dropdown from Vehicles table ── */}
+                {/* Vehicle Number */}
                 <div className="dpr-field">
                   <label className="dpr-label">Vehicle No.</label>
                   <select
@@ -634,7 +668,7 @@ export default function DailyProgressReportPage() {
                   />
                 </div>
 
-                {/* ── Driver — dropdown from DRIVER users ── */}
+                {/* Driver */}
                 <div className="dpr-field">
                   <label className="dpr-label">Driver</label>
                   <select
@@ -708,8 +742,6 @@ export default function DailyProgressReportPage() {
                     onChange={e => {
                       const val = e.target.value;
                       setField("targetAchieve", val);
-
-                      // ✅ CLEAR OLD VALUE WHEN NOT OTHER
                       if (val !== "OTHER") {
                         setField("targetAchieveOther", "");
                       }
@@ -721,7 +753,7 @@ export default function DailyProgressReportPage() {
                   </select>
                 </div>
 
-                {/* Custom text — only shown when OTHER is selected */}
+                {/* Custom text — only when OTHER */}
                 {formData.targetAchieve === "OTHER" && (
                   <div className="dpr-field dpr-field-other">
                     <label className="dpr-label">
@@ -740,11 +772,12 @@ export default function DailyProgressReportPage() {
                   </div>
                 )}
 
-              </div>{/* /form-grid */}
-            </div>{/* /modal-bd */}
+              </div>
+            </div>
 
             <div className="dpr-modal-ft">
-              <button className="dpr-btn dpr-btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
+              {/* ✅ Cancel button resets editId */}
+              <button className="dpr-btn dpr-btn-ghost" onClick={() => { setShowForm(false); setEditId(null); }}>Cancel</button>
               <button className="dpr-btn dpr-btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <span className="dpr-spin"/> : <ICheck size={14}/>}
                 Save Row
@@ -840,7 +873,7 @@ export default function DailyProgressReportPage() {
         .dpr-hours-value{font-size:22px;font-weight:800;color:#1d4ed8;letter-spacing:-.5px}
         .dpr-hours-note {font-size:11px;color:#64748b;margin-left:auto;font-style:italic}
 
-        /* SPECIAL NOTE — standalone, outside modal */
+        /* SPECIAL NOTE */
         .dpr-note-section{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
         .dpr-note-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .dpr-note-icon  {font-size:16px}
@@ -899,6 +932,9 @@ export default function DailyProgressReportPage() {
         .dpr-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
         .dpr-del-btn{background:none;border:none;cursor:pointer;color:#cbd5e1;padding:5px;border-radius:6px;display:flex;transition:all .15s}
         .dpr-del-btn:hover{background:#fee2e2;color:#ef4444}
+        /* ✅ EDIT BUTTON CSS */
+        .dpr-edit-btn{background:none;border:none;cursor:pointer;color:#cbd5e1;padding:5px;border-radius:6px;display:flex;transition:all .15s}
+        .dpr-edit-btn:hover{background:#eff6ff;color:#2563eb}
 
         /* MODAL */
         .dpr-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -968,4 +1004,3 @@ export default function DailyProgressReportPage() {
     </div>
   );
 }
-

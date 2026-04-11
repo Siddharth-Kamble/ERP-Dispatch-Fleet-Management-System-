@@ -1,6 +1,6 @@
 package onedeoleela.onedeoleela.Repository;
 
-import onedeoleela.onedeoleela.Entity.Project;
+
 import onedeoleela.onedeoleela.Entity.ProjectLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -15,4 +15,6 @@ public interface ProjectLogRepository extends JpaRepository<ProjectLog, Long> {
 
     Optional<ProjectLog> findFirstByTripId(Long tripId);
     ProjectLog findTopByTripIdOrderByIdDesc(Long tripId);
+    Optional<ProjectLog> findFirstByTripIdOrderByCreatedAtDesc(Long tripId);
+
 }

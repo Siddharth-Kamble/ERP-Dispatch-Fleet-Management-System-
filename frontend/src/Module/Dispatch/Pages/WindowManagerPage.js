@@ -422,7 +422,7 @@ const downloadPDF = async () => {
 
   doc.setFontSize(8);
   doc.setTextColor(100, 100, 100);
-  doc.text("Building No/Flat No 327, Bopgaon Chouck, Pune, Maharashtra 412301", 160, 25, { align: "center" });
+  doc.text("Building No/Flat No 327, Bopgaon Chowk, Pune, Maharashtra 412301", 160, 25, { align: "center" });
 
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);

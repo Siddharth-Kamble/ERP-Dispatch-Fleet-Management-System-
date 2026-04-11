@@ -35,7 +35,7 @@ public class ProjectRecordsController {
             return ResponseEntity.badRequest().body("recordDate is required");
         }
 
-        // ❌ No need to set day → handled in entity
+
 
         ProjectRecords savedRecord = recordsService.addRecord(projectId, record);
         return ResponseEntity.ok(savedRecord);

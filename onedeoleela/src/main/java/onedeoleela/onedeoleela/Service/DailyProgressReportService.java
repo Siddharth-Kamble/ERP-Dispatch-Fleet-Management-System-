@@ -532,11 +532,11 @@ public class DailyProgressReportService {
                 cell.setCellStyle(achieveStyle);
             }
             case CANCELLED -> {
-                cell.setCellValue("GLASS MATERIAL NOT RECEIVED");
+                cell.setCellValue("CANCELLED");
                 cell.setCellStyle(redFillStyle);
             }
             case BREAKDOWN -> {
-                cell.setCellValue("VEHICLE BREAK DOWN");
+                cell.setCellValue("BREAKDOWN");
                 cell.setCellStyle(redFillStyle);
             }
             case NOT_ACHIEVED -> {
@@ -751,5 +751,28 @@ public class DailyProgressReportService {
             // साफ कर दो unnecessary data
             report.setTargetAchieveOther(null);
         }
+    }
+
+    // In ExpenseEntityService or DailyProgressReportService:
+    public DailyProgressReport update(Long id, DailyProgressReport updated) {
+        DailyProgressReport existing = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Row not found: " + id));
+
+        existing.setReportDate(updated.getReportDate());
+        existing.setEmployeeName(updated.getEmployeeName());
+        existing.setSrNo(updated.getSrNo());
+        existing.setVehicleNumber(updated.getVehicleNumber());
+        existing.setTripNumber(updated.getTripNumber());
+        existing.setDriverName(updated.getDriverName());
+        existing.setDescription(updated.getDescription());
+        existing.setFromLocation(updated.getFromLocation());
+        existing.setToLocation(updated.getToLocation());
+        existing.setTimeSlot(updated.getTimeSlot());
+        existing.setTargetAchieve(updated.getTargetAchieve());
+        existing.setTargetAchieveOther(updated.getTargetAchieveOther());
+        existing.setRemark(updated.getRemark());
+        existing.setSpecialNote(updated.getSpecialNote());
+
+        return repository.save(existing);
     }
 }
