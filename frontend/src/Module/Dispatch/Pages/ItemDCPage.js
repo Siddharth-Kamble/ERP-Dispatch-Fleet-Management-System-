@@ -365,6 +365,8 @@ const WindowManager = () => {
   //
   //   c) All other logic, header layout, table structure, footer — UNCHANGED.
   // ─────────────────────────────────────────────────────────────────────────────
+
+
   const downloadPDF = async () => {
     const tripInput = prompt("Enter Trip ID (optional):")?.trim();
 
@@ -584,7 +586,8 @@ getValue: (w) => {
     });
 
     const tableColumn = activeColumns.map((c) => c.header);
-    const tableRows   = filteredWindows.map((w, i) =>
+
+    const tableRows = filteredWindows.map((w, i) =>
       activeColumns.map((c) => {
         const val = c.getValue(w, i);
         if (val === null || val === undefined) return "";
@@ -592,6 +595,29 @@ getValue: (w) => {
       })
     );
 
+   const numericHeaders = new Set(["Qty", "SqFt", "Weight", "R Mtr"]);
+
+   const totalRow = activeColumns.map((col, colIdx) => {
+     // Sr No. column — always blank in total row
+     if (col.header === "Sr No.") return "";
+
+     // First non-numeric, non-SrNo column gets the "TOTAL" label
+     if (!numericHeaders.has(col.header)) {
+       return colIdx === 1 ? "TOTAL" : "";
+     }
+
+     const sum = filteredWindows.reduce((acc, w, i) => {
+       const val = parseFloat(col.getValue(w, i));
+       return acc + (isNaN(val) ? 0 : val);
+     }, 0);
+
+     // Qty = integer, others = 2 decimal places
+     return col.header === "Qty"
+       ? String(Math.round(sum))
+       : sum.toFixed(2);
+   });
+
+    tableRows.push(totalRow);
     const doc = new jsPDF("landscape");
     const refWindow = filteredWindows[0];
     const refTrip   = refWindow?.trip || {};
@@ -650,54 +676,24 @@ getValue: (w) => {
     doc.text(`Trip Status: ${refTrip.status       || "N/A"}`, 220, 66);
 
     // --- TABLE (unchanged) ---
-    autoTable(doc, {
-      head:       [tableColumn],
-      body:       tableRows,
-      startY:     78,
-      theme:      "grid",
-      styles:     { fontSize: 7 },
-      headStyles: { fillColor: [44, 62, 80] },
-    });
+ autoTable(doc, {
+   head:       [tableColumn],
+   body:       tableRows,
+   startY:     78,
+   theme:      "grid",
+   styles:     { fontSize: 7 },
+   headStyles: { fillColor: [44, 62, 80] },
+   didParseCell: function (data) {
+     if (data.section === "body" && data.row.index === tableRows.length - 1) {
+       data.cell.styles.fontStyle  = "bold";
+       data.cell.styles.fillColor  = [230, 230, 230];
+       data.cell.styles.textColor  = [0, 0, 0];
+     }
+   },
+ });
 
     const finalY = (doc.lastAutoTable?.finalY || 78) + 10;
 
-     // ====== NEW TOTAL LOGIC START ======
-
-     // Check if columns exist in PDF
-     const hasSqFt = activeColumns.some(col => col.header === "SqFt");
-     const hasWeight = activeColumns.some(col => col.header === "Weight");
-
-     // Totals
-     let totalSqFt = 0;
-     let totalWeight = 0;
-
-     // Calculate SqFt total if present
-     if (hasSqFt) {
-       totalSqFt = filteredWindows.reduce((sum, w) => {
-         const val = Number(w.sqFt);
-         return sum + (isNaN(val) ? 0 : val);
-       }, 0);
-     }
-
-     // Calculate Weight total if present
-     if (hasWeight) {
-       totalWeight = filteredWindows.reduce((sum, w) => {
-         const val = Number(w.weight);
-         return sum + (isNaN(val) ? 0 : val);
-       }, 0);
-     }
-
-     // Print totals
-     let x = 220;
-
-     if (hasSqFt) {
-       doc.text(`Total SqFt: ${totalSqFt.toFixed(2)}`, x, finalY);
-       x += 50;
-     }
-
-     if (hasWeight) {
-       doc.text(`Total Weight: ${totalWeight.toFixed(2)}`, x, finalY);
-     }
 
      // ====== NEW TOTAL LOGIC END ======
     doc.text("Prepared By: ________________",                 14, finalY + 20);

@@ -35,6 +35,7 @@ function DispatchHome() {
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [requestCount, setRequestCount] = useState(0);
 
     /* ================= LOAD COUNTS ================= */
 
@@ -85,6 +86,37 @@ function DispatchHome() {
 
     }, [user?.eCode]);
 
+
+
+    useEffect(() => {
+        if (!user?.eCode) return;
+
+        const loadRequestCount = async () => {
+            try {
+
+                // ✅ SAME LOGIC AS COORDINATOR
+                const apiUrl =
+                    user?.role === "DISPATCH"
+                        ? `/api/vehicle-requests/notifications/dispatcher/count`
+                        : `/api/vehicle-requests/notifications/requester/${user.eCode}/count`;
+
+                const res = await fetch(`${API_URL}${apiUrl}`);
+                const data = await res.json();
+
+                setRequestCount(data.count || 0);
+
+            } catch (err) {
+                console.error("Dispatch notification error:", err);
+            }
+        };
+
+        loadRequestCount();
+
+        const interval = setInterval(loadRequestCount, 15000);
+        return () => clearInterval(interval);
+
+    }, [user?.eCode, user?.role]);
+
     /* ================= LOGOUT ================= */
 
     const logout = () => {
@@ -95,9 +127,19 @@ function DispatchHome() {
 
     const isHome = location.pathname === "/dispatch-dashboard";
 
-    const activeMenu = (path) =>
-        location.pathname === path ? "menu active" : "menu";
+    const activeMenu = (path) => {
+        if (location.pathname === path) return "menu active";
 
+        // highlight Vehicle Requests if new notifications
+        if (
+            path === "/dispatch-dashboard/vehicle-requests" &&
+            requestCount > 0
+        ) {
+            return "menu highlight";
+        }
+
+        return "menu";
+    };
     /* ================= CARD DATA ================= */
 
     const vehicleCards = [
@@ -196,6 +238,12 @@ function DispatchHome() {
             color: "#2563eb",
             onClick: () => navigate("/vehicle-requisition-list"),
         },
+          {
+                title: "Vehicle Requests",
+                icon: <FaTruck />, // you can change icon if needed
+                color: "#0ea5e9",
+                onClick: () => navigate("/dispatch-dashboard/vehicle-requests"),
+            },
     ];
 
     const managementCards = [
@@ -265,11 +313,56 @@ function DispatchHome() {
                 <Link to="/dispatch-dashboard" className={activeMenu("/dispatch-dashboard")}>
                     Dashboard
                 </Link>
+<Link
+    to="/dispatch-dashboard/vehicle-requests"
+    className="menu"
+    style={{ position: "relative" }}
+>
+    Vehicle Requests
 
-                <Link to="/dispatch-dashboard/vehicles" className={activeMenu("/dispatch-dashboard/vehicles")}>
-                    Vehicles
-                </Link>
+    {requestCount > 0 && (
+        <span style={{
+            position: "absolute",
+            top: 6,
+            right: 10,
+            background: "#ef4444",
+            color: "#fff",
+            borderRadius: "50%",
+            minWidth: 18,
+            height: 18,
+            fontSize: 10,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 5px"
+        }}>
+            {requestCount}
+        </span>
+    )}
+</Link>
+               <Link to="/dispatch-dashboard/routes/add" className={activeMenu("/dispatch-dashboard/routes/add")}>
+                   Add Trip
+               </Link>
+               <Link to="/dispatch-dashboard/routes" className={activeMenu("/dispatch-dashboard/routes")}>
+                   View Trips
+               </Link>
+               <Link to="/dispatch-dashboard/window-dc" className={activeMenu("/dispatch-dashboard/window-dc")}>
+                   Window DC
+               </Link>
+               <Link to="/dispatch-dashboard/bulk-upload-window" className={activeMenu("/dispatch-dashboard/bulk-upload-window")}>
+                   Bulk Upload DC
+               </Link>
+              <Link to="/dispatch-dashboard/material-dc" className={activeMenu("/dispatch-dashboard/material-dc")}>
+                  Material DC
+              </Link>
 
+              <Link to="/dispatch-dashboard/dispatch-report" className={activeMenu("/dispatch-dashboard/dispatch-report")}>
+                  Dispatch Report
+              </Link>
+              <Link to="/dispatch-dashboard/daily-reports" className={activeMenu("/dispatch-dashboard/daily-reports")}>
+                  Daily Reports
+              </Link>
                 <Link to="/dispatch-dashboard/expenses" className={activeMenu("/dispatch-dashboard/expenses")}>
                     Expenses
                 </Link>
@@ -278,9 +371,11 @@ function DispatchHome() {
                     Requisitions
                 </Link>
 
+
                 <Link to="/dispatch-dashboard/live-tracking" className={activeMenu("/dispatch-dashboard/live-tracking")}>
                     Live Tracking
                 </Link>
+
 
                 <button className="logout" onClick={logout}>
                     <FaSignOutAlt /> Logout

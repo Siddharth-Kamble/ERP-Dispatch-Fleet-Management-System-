@@ -43,4 +43,9 @@ public class ProjectLogController {
     public ResponseEntity<Map<String, Object>> getTripDates(@PathVariable Long tripId) {
         return ResponseEntity.ok(projectLogService.getTripDates(tripId));
     }
+
+    @GetMapping("/tower/{tripId}")
+    public Map<String, Object> getTowerDetails(@PathVariable Long tripId) {
+        return projectLogService.getTowerDetailsByTripId(tripId);
+    }
 }

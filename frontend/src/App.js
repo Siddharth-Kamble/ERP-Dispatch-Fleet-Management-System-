@@ -10,6 +10,7 @@ import LoginPage from "./pages/LoginPage";
 //Coordinator page
 import FloorFlatManager from "./Module/Coordinator/Pages/FloorFlatManager";
 import ProjectManagerPage from "./Module/Coordinator/Pages/ProjectManagerPage";
+import UserVehicleRequestPage from "./Module/Common/Uservehiclerequestpage";
 
 // Admin & VP & Driver
 import AdminDashboard from "./pages/AdminDashboard";
@@ -31,6 +32,7 @@ import BulkUploadWindowPage from "./Module/Dispatch/Pages/BulkUploadWindowPage";
 import ItemDCPage from "./Module/Dispatch/Pages/ItemDCPage";
 import DispatchReport from "./Module/Dispatch/Pages/DispatchReport";
 import DailyReports from "./Module/Dispatch/Pages/DailyReports";
+import DispatchRequestPage from "./Module/Dispatch/Pages/DispatchRequestPage";
 // Other Dashboards
 import ProductionDashboard from "./pages/ProductionDashbaord";
 import SiteSupervisorDashboard from "./pages/SiteSupervisorDashboard";
@@ -92,7 +94,10 @@ function App() {
                      element={<DispatchReport/>}
                    />
                    <Route path="daily-reports" element={<DailyReports />} />
-
+                    <Route
+                      path="/dispatch-dashboard/vehicle-requests"
+                      element={<DispatchRequestPage />}
+                    />
                 </Route>
 
                 {/* Other Dashboards */}
@@ -106,6 +111,10 @@ function App() {
                     <Route path="floor-flat" element={<FloorFlatManager />} />
                     <Route path="planning/create" element={<AddVehicleRequisition />} />
                     <Route path="planning/view" element={<VehicleRequisitionList />} />
+                  <Route
+                    path="vehicle-requests"
+                    element={<UserVehicleRequestPage />}
+                  />
                 </Route>
 
                 <Route path="powder_coating-dashboard" element={<PowderCoatingDashboard />} />

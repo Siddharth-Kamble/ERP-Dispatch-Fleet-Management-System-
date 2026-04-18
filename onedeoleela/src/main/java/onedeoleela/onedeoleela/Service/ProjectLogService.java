@@ -74,4 +74,22 @@
 
             return response;
         }
+
+        public Map<String, Object> getTowerDetailsByTripId(Long tripId) {
+
+            List<Object[]> data = projectLogRepository.findTowerDetailsByTripId(tripId);
+
+            if (data.isEmpty()) {
+                throw new RuntimeException("No data found for this tripId");
+            }
+
+            // ✅ Since all towerIds are same → take first row
+            Object[] row = data.get(0);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("towerId", row[0]);
+            result.put("towerName", row[1]);
+
+            return result;
+        }
     }

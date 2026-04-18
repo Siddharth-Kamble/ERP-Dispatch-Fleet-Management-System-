@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     FaBars,
     FaSignOutAlt,
@@ -9,7 +9,8 @@ import {
     FaListAlt,
     FaArrowLeft,
     FaProjectDiagram,
-    FaBuilding
+    FaBuilding,
+    FaTruck
 } from "react-icons/fa";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 
@@ -23,9 +24,34 @@ function CoordinatorDashboard() {
 
     // internal state for Requisition sub-navigation
     const [activePage, setActivePage] = useState("dashboard");
+    const [requestCount, setRequestCount] = useState(0);
+    const [error, setError] = useState("");
+
 
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     const departmentName = user?.role || "COORDINATOR";
+    useEffect(() => {
+      if (!user?.eCode) return;
+        const loadRequestCount = async () => {
+            try {
+              const res = await fetch(
+                `${process.env.REACT_APP_API_URL}/api/vehicle-requests/notifications/requester/${user?.eCode}/count`
+              );
+                const data = await res.json();
+                setRequestCount(data.count || 0);
+            } catch (err) {
+                console.error("Failed to load request count", err);
+            }
+        };
+
+        loadRequestCount();
+
+        const interval = setInterval(loadRequestCount, 15000); // auto refresh
+        return () => clearInterval(interval);
+    }, []);
+
+
+
 
     const handleLogout = () => {
         localStorage.removeItem("user");
@@ -36,6 +62,7 @@ function CoordinatorDashboard() {
     const isHome = location.pathname === "/coordinator-dashboard" && activePage === "dashboard";
     const isProjects = location.pathname === "/coordinator-dashboard/projects";
     const isFloorFlat = location.pathname === "/coordinator-dashboard/floor-flat";
+
 
     const goBack = () => {
         if (activePage === "create" || activePage === "view") {
@@ -106,6 +133,33 @@ function CoordinatorDashboard() {
                 >
                     <FaBuilding style={styles.icon}/> Floor & Flat Manager
                 </button>
+              <button
+                  style={{ ...activeMenu("/coordinator-dashboard/vehicle-requests"), position: "relative" }}
+                  onClick={() => {
+                      setActivePage("other");
+                      navigate("/coordinator-dashboard/vehicle-requests");
+                  }}
+              >
+                  <FaTruck style={styles.icon}/> Vehicle Requests
+
+                  {requestCount > 0 && (
+                      <span style={{
+                          position: "absolute",
+                          top: "6px",
+                          right: "10px",
+                          background: "#ef4444",
+                          color: "#fff",
+                          borderRadius: "50%",
+                          padding: "2px 6px",
+                          fontSize: "10px",
+                          fontWeight: "700",
+                          minWidth: "18px",
+                          textAlign: "center"
+                      }}>
+                          {requestCount}
+                      </span>
+                  )}
+              </button>
 
                 <button style={styles.logout} onClick={handleLogout}>
                     <FaSignOutAlt style={styles.icon}/> Logout
@@ -151,6 +205,20 @@ function CoordinatorDashboard() {
                                         <div style={{ fontSize: 30, color: "#f59e0b", marginBottom: 15 }}><FaBuilding /></div>
                                         <h3>Floor & Flat Manager</h3>
                                         <p style={{ fontSize: '14px', color: '#64748b' }}>Unit Inventory & Details</p>
+                                    </div>
+
+                                    <div
+                                      className="card"
+                                      style={{ borderTop: "4px solid #22c55e" }}
+                                      onClick={() => navigate("/coordinator-dashboard/vehicle-requests")}
+                                    >
+                                        <div style={{ fontSize: 30, color: "#22c55e", marginBottom: 15 }}>
+                                            <FaTruck />
+                                        </div>
+                                        <h3>Vehicle Requests</h3>
+                                        <p style={{ fontSize: '14px', color: '#64748b' }}>
+                                            Raise & Track Vehicle Requests
+                                        </p>
                                     </div>
                                 </div>
                             </div>

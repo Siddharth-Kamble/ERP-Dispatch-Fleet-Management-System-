@@ -280,6 +280,7 @@ const formatDate = (dateStr) => {
   if (!dateStr) return null;
   return new Date(dateStr).toLocaleDateString("en-IN");
 };
+
 const downloadPDF = async () => {
   const tripInput = prompt("Enter Trip ID (optional):")?.trim();
   let filteredWindows = windows;
@@ -303,91 +304,49 @@ const downloadPDF = async () => {
     }
 
     try {
-      // 1. Fetch Project Log using Trip ID
-
-
+      // 1. Fetch trip date comparison
       try {
         const dateRes = await axios.get(`${API_URL}/logs/trip/${tripInput}/dates`);
         tripDateData = dateRes.data;
       } catch (err) {
         console.error("Error fetching trip date comparison:", err);
       }
-      const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
-      if (response.data && response.data.length > 0) {
-    const tripLog = response.data.find(
-      (log) => log.tripId?.toString() === tripInput
-    );
 
-    if (tripLog) {
-      dispatchInfo = {
-        projectName: tripLog.projectName || "N/A",
-        dcNo: tripLog.dcNo || "N/A",
-        workOrderNumber: tripLog.workOrderNumber || "N/A",
-        codeNo: tripLog.codeNo || "N/A",
-        userDate: tripLog.userDate || null   // ✅ ADDED
-      };
-    }
-
-
-
-
-
-
-    if (dispatchInfo.projectName) {
+      // 2. Fetch Project Log using Trip ID
       try {
-        // ✅ STEP 1: Get Project ID using projectName
-        const projectRes = await axios.get(
-          `${API_URL}/projects/by-name/${dispatchInfo.projectName}`
-        );
-
-        const pId = projectRes.data?.projectId || projectRes.data?.id;
-
-        // ✅ STEP 2: Get Tower ID from window
-        const refWindow = filteredWindows[0];
-        const tId =
-          refWindow?.tower?.towerId ||
-          refWindow?.towerId ||
-          selectedTower;
-
-        // ✅ STEP 3: Fetch tower name using trip API (BEST WAY)
-        if (tripInput) {
-          const towerRes = await axios.get(
-            `${API_URL}/api/towers/trip/${tripInput}`
+        const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
+        if (response.data && response.data.length > 0) {
+          const tripLog = response.data.find(
+            (log) => log.tripId?.toString() === tripInput
           );
 
-          const foundTower = towerRes.data.find(
-            (t) => t.towerId == tId
-          );
-
-          if (foundTower) {
-            dynamicTowerName = foundTower.towerName;
+          if (tripLog) {
+            dispatchInfo = {
+              projectName: tripLog.projectName || "N/A",
+              dcNo: tripLog.dcNo || "N/A",
+              workOrderNumber: tripLog.workOrderNumber || "N/A",
+              codeNo: tripLog.codeNo || "N/A",
+              userDate: tripLog.userDate || null
+            };
           }
         }
       } catch (err) {
-        console.error("Project/Tower fetch error:", err);
+        console.error("Error fetching project log:", err);
       }
-    }
 
-        // 2. Fetch Project ID using Project Name from the log
-//        if (dispatchInfo.projectName) {
-//          const projectRes = await axios.get(`http://localhost:8080/projects/by-name/${latestLog.projectName}`);
-//          const pId = projectRes.data?.projectId;
-//
-//          // 3. Fetch Tower Name using Project ID and the Tower ID from the first window
-//          const refWindow = filteredWindows[0];
-//          const tId = refWindow?.tower?.towerId || refWindow?.towerId || selectedTower;
-//
-//          if (pId && tId) {
-//             // Fetch towers for this project to find the specific tower name
-//                  const towerRes = await axios.get(`${API_URL}/api/towers/trip/${tripInput}`);
-//
-//             const foundTower = towerRes.data.find(t => t.towerId == tId);
-//             if (foundTower) {
-//               dynamicTowerName = foundTower.towerName;
-//             }
-//          }
-//        }
+      // ✅ FIX: Tower name fetch is NOW independent — runs always when tripInput exists
+      // Previously it was buried inside if(tripLog) → if(dispatchInfo.projectName)
+      // which caused it to silently skip when those conditions failed
+      try {
+        const towerRes = await axios.get(`${API_URL}/logs/tower/${tripInput}`);
+        if (towerRes.data) {
+          dynamicTowerName = towerRes.data.towerName || "N/A";
+          console.log("✅ Tower name fetched:", dynamicTowerName);
+        }
+      } catch (err) {
+        console.error("Error fetching tower name:", err);
       }
+
     } catch (error) {
       console.error("Error fetching project/tower details for Trip:", error);
     }
@@ -433,18 +392,19 @@ const downloadPDF = async () => {
   doc.text(`DC No: ${dispatchInfo.dcNo}`, 14, 54);
   doc.text(`Work Order No: ${dispatchInfo.workOrderNumber}`, 14, 60);
   doc.text(`Code No: ${dispatchInfo.codeNo}`, 14, 66);
-if (tripDateData) {
-  const materialDate = formatDate(tripDateData.userDate);
-  const actualDate = formatDate(tripDateData.actualDate);
+  if (tripDateData) {
+    const materialDate = formatDate(tripDateData.userDate);
+    const actualDate = formatDate(tripDateData.actualDate);
     console.log("PDF Dates:", materialDate, actualDate);
 
-  if (!tripDateData.sameDate) {
-    doc.text(`Material Delivery Date: ${materialDate}`, 14, 72);
-    doc.text(`Actual Date: ${actualDate}`, 14, 78);
-  } else {
-    doc.text(`Delivery Date: ${materialDate}`, 14, 72);
+    if (!tripDateData.sameDate) {
+      doc.text(`Material Delivery Date: ${materialDate}`, 14, 72);
+      doc.text(`Actual Date: ${actualDate}`, 14, 78);
+    } else {
+      doc.text(`Delivery Date: ${materialDate}`, 14, 72);
+    }
   }
-}
+
   // Right side Header Info
   doc.text(`Trip ID: ${tripInput || refTrip.id || "All"}`, 220, 42);
   doc.text(`Date: ${new Date().toLocaleDateString()}`, 220, 48);
@@ -478,29 +438,58 @@ if (tripDateData) {
     w.sqft || 0
   ]);
 
+  // Calculate totals for Track Outer, Bottom Fix, Glass Shutter, Mesh Shutter, Units, SqFt
+  const totalTrack  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.trackOuter)   || 0), 0);
+  const totalBottom = filteredWindows.reduce((sum, w) => sum + (parseInt(w.bottomFix)    || 0), 0);
+  const totalGlass  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.glassShutter) || 0), 0);
+  const totalMesh   = filteredWindows.reduce((sum, w) => sum + (parseInt(w.meshShutter)  || 0), 0);
+  const totalUnits  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.units)        || 0), 0);
+  const totalSqFt   = filteredWindows.reduce((sum, w) => sum + (parseFloat(w.sqft)       || 0), 0);
+
+  // Totals row — blank cells for columns that don't need a total
+  const totalsRow = [
+    "", "", "", "", "", "", "", "", "",   // Sr, Trip ID, Win.Sr, Flat, Loc, W.Code, Description, Job Card, Series
+    "",                                   // Width  — no total
+    "",                                   // Height — no total
+    totalTrack,
+    totalBottom,
+    totalGlass,
+    totalMesh,
+    totalUnits,
+    totalSqFt.toFixed(2)
+  ];
+
   autoTable(doc, {
     head: [tableColumn],
-    body: tableRows,
+    body: [...tableRows, totalsRow],
     startY: 75,
     theme: "grid",
     styles: { fontSize: 6.5, cellPadding: 1.5 },
     headStyles: { fillColor: [44, 62, 80] },
     columnStyles: {
       6: { cellWidth: 35 },
-    }
+    },
+    // Style the totals row — bold + light background to distinguish it
+    didParseCell: function (data) {
+      if (data.row.index === tableRows.length) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [230, 230, 230];
+      }
+    },
   });
 
   const finalY = (doc.lastAutoTable?.finalY || 75) + 10;
-  const totalSqFt = filteredWindows.reduce((sum, w) => sum + (parseFloat(w?.sqft) || 0), 0).toFixed(2);
 
   doc.setFontSize(10);
-  doc.text(`Total SqFt: ${totalSqFt}`, 250, finalY);
+  doc.text(`Total SqFt: ${totalSqFt.toFixed(2)}`, 250, finalY);
   doc.text("Prepared By: ________________", 14, finalY + 20);
   doc.text("Checked By: ________________", 110, finalY + 20);
   doc.text("Received By: ________________", 210, finalY + 20);
 
   doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
 };
+
+
 
 
 
