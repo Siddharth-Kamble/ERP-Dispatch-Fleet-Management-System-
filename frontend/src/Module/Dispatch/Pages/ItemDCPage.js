@@ -350,358 +350,410 @@ const WindowManager = () => {
     URL.revokeObjectURL(url);
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // CHANGE 3: downloadPDF
-  //
-  //   a) Material Delivery Date — now fetched from the dedicated backend endpoint
-  //      GET /api/items/material-delivery-date/{tripId}
-  //      Returns "dd/MM/yyyy" string or 204 (no content) when not applicable.
-  //      Previously relied on /logs/trip/{tripId}/dates which may not exist.
-  //
-  //   b) Column presence — now fetched from the dedicated backend endpoint
-  //      GET /api/items/column-presence/{tripId}
-  //      Returns Map<String,Boolean>. Frontend falls back to client-side
-  //      hasValue() check if the endpoint fails (graceful degradation).
-  //
-  //   c) All other logic, header layout, table structure, footer — UNCHANGED.
-  // ─────────────────────────────────────────────────────────────────────────────
+const downloadPDF = async () => {
+  const tripInput    = prompt("Enter Trip ID (optional):")?.trim();
+  const extraName    = prompt("Enter Receiver Name (optional):")?.trim() || "";
+  const extraContact = prompt("Enter Receiver Contact No (optional):")?.trim() || "";
 
+  let filteredWindows = windows;
 
-  const downloadPDF = async () => {
-    const tripInput = prompt("Enter Trip ID (optional):")?.trim();
+  let dispatchInfo = {
+    projectName:     "N/A",
+    clientName:      "N/A",
+    dcNo:            "N/A",
+    workOrderNumber: "N/A",
+    codeNo:          "N/A",
+  };
 
-    let filteredWindows = windows;
+  let dynamicTowerName     = "N/A";
+  let actualDate           = null;
+  let materialDeliveryDate = null;
+  let driverMobile         = "N/A";
 
-    let dispatchInfo = {
-      projectName:     "N/A",
-      dcNo:            "N/A",
-      workOrderNumber: "N/A",
-      codeNo:          "N/A",
-    };
-
-    let dynamicTowerName        = "N/A";
-    let actualDate              = null;
-    // CHANGE 3a: materialDeliveryDate now comes from the dedicated endpoint
-    let materialDeliveryDate    = null;
-
-    if (tripInput) {
-      filteredWindows = windows.filter(
-        (w) => (w?.trip?.id ?? w?.tripId)?.toString() === tripInput
-      );
-
-      if (filteredWindows.length === 0) {
-        return alert("No Material found for the entered Trip ID.");
-      }
-
-      // ── Fetch project log for dispatch info (unchanged) ──────────────────
-      try {
-        const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
-        if (response.data && response.data.length > 0) {
-          const latestLog = response.data[0];
-
-          // Actual/created date — try existing dates endpoint first, fallback to log
-          try {
-            const dateRes = await axios.get(`${API_URL}/logs/trip/${tripInput}/dates`);
-            if (dateRes.data) {
-              actualDate = dateRes.data.actualDate;
-            }
-          } catch (err) {
-            // endpoint may not exist — silently skip
-          }
-
-          dispatchInfo = {
-            projectName:     latestLog.projectName     || "N/A",
-            dcNo:            latestLog.dcNo            || "N/A",
-            workOrderNumber: latestLog.workOrderNumber || "N/A",
-            codeNo:          latestLog.codeNo          || "N/A",
-          };
-
-          if (latestLog.projectName) {
-            try {
-              const projectRes = await axios.get(`${API_URL}/projects/by-name/${latestLog.projectName}`);
-              const pId = projectRes.data?.projectId;
-              const refWindow = filteredWindows[0];
-              const tId = refWindow?.tower?.towerId || refWindow?.towerId || selectedTower;
-              if (pId && tId) {
-                const towerRes   = await axios.get(`${API_URL}/api/towers/project/${pId}`);
-                const foundTower = towerRes.data.find((t) => t.towerId == tId);
-                if (foundTower) dynamicTowerName = foundTower.towerName;
-              }
-            } catch (err) {
-              console.error("Error fetching tower name:", err);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching project log for Trip:", error);
-      }
-
-      // ── CHANGE 3a: Fetch Material Delivery Date from new endpoint ─────────
-      try {
-        const mdRes = await axios.get(
-          `${API_URL}/api/items/material-delivery-date/${tripInput}`
-        );
-        // 200 = date string returned (e.g. "15/04/2026")
-        // 204 = no content (userDate same as createdAt or null) — axios throws on 204
-        if (mdRes.status === 200 && mdRes.data) {
-          materialDeliveryDate = mdRes.data;  // already formatted as dd/MM/yyyy by backend
-        }
-      } catch (err) {
-        // 204 No Content or network error — materialDeliveryDate stays null
-        if (err.response?.status !== 204) {
-          console.error("Error fetching material delivery date:", err);
-        }
-      }
-    }
-
-    if (filteredWindows.length === 0) {
-      return alert("No data available to generate PDF.");
-    }
-
-    // ── CHANGE 3b: Fetch column presence from backend ─────────────────────────
-    // Falls back to client-side hasValue() if endpoint fails.
-    let serverColumnPresence = null;
-    if (tripInput) {
-      try {
-        const cpRes = await axios.get(
-          `${API_URL}/api/items/column-presence/${tripInput}`
-        );
-        serverColumnPresence = cpRes.data; // Map<String,Boolean>
-      } catch (err) {
-        console.error("Column presence endpoint unavailable, falling back to client-side check:", err);
-      }
-    }
-
-    // ── Define ALL columns — same order as before ──────────────────────────
-    const allColumns = [
-      {
-        header: "Sr No.",
-        mandatory: true,
-        getValue: (w, i) => i + 1,
-      },
-      {
-        header: "Win Sr No",
-        mandatory: false,
-        getValue: (w) => w.winSrNo,
-      },
-      {
-        header: "Floor No",
-        mandatory: false,
-        //getValue: (w) => w?.floor?.floorNumber ?? w?.floorNo,
-       getValue: (w) => {
-         const val = w?.floor?.floorNumber ?? w?.floorNo;
-         return val === "" || val === undefined ? null : val;
-       },
-      },
-      {
-        header: "Flat No",
-        mandatory: false,
-//        getValue: (w) => w?.flat?.flatNumber ?? w?.flat?.flatNo ?? w.flatNo,
-
-getValue: (w) => {
-  const val = w?.flat?.flatNumber ?? w?.flat?.flatNo ?? w.flatNo;
-  return val === "" || val === undefined ? null : val;
-},
-      },
-      {
-        header: "Location",
-        mandatory: false,
-        getValue: (w) => w.location,
-      },
-      {
-        header: "Window Code",
-        mandatory: false,
-        // CHANGE: also read windowCode field added to entity
-        getValue: (w) => w.windowCode ?? w.window_code ?? w.WindowCode,
-      },
-      {
-        header: "Job Card No",
-        mandatory: false,
-        getValue: (w) => w.jobCardNo,
-      },
-      {
-        header: "Priority",
-        mandatory: false,
-        // CHANGE: read priority field added to entity
-        getValue: (w) => w.priority,
-      },
-      {
-        header: "Description",
-        mandatory: false,
-        getValue: (w) => w.description,
-      },
-      {
-        header: "Width",
-        mandatory: false,
-        getValue: (w) => (w.width  != null && w.width  !== 0) ? w.width  : null,
-      },
-      {
-        header: "Height",
-        mandatory: false,
-        getValue: (w) => (w.height != null && w.height !== 0) ? w.height : null,
-      },
-      {
-        header: "Qty",
-        mandatory: false,
-        getValue: (w) => (w.qty    != null && w.qty    !== 0) ? w.qty    : null,
-      },
-      {
-        header: "Unit",
-        mandatory: false,
-        getValue: (w) => w.unit,
-      },
-      {
-        header: "SqFt",
-        mandatory: false,
-        getValue: (w) => (w.sqFt   != null && w.sqFt   !== 0) ? w.sqFt   : null,
-      },
-      {
-        header: "Weight",
-        mandatory: false,
-        // CHANGE: read actual weight field (not sqFt alias)
-        getValue: (w) => (w.weight != null && w.weight !== 0) ? w.weight : null,
-      },
-      {
-        header: "R Mtr",
-        mandatory: false,
-        // CHANGE: read rMtr field added to entity
-        getValue: (w) => w.rMtr ?? w.rmtr ?? w.rMeter ?? w.r_mtr,
-      },
-      {
-        header: "Remarks",
-        mandatory: false,
-        getValue: (w) => w.remarks,
-      },
-    ];
-
-    // ── CHANGE 3b: Use server column presence when available ───────────────
-    // Server map keys match PDF header labels exactly (set up in ItemService).
-    const activeColumns = allColumns.filter((col) => {
-      if (col.mandatory) return true;
-      // Server presence takes priority; fall back to client-side check
-      if (serverColumnPresence && col.header in serverColumnPresence) {
-        return serverColumnPresence[col.header] === true;
-      }
-      return filteredWindows.some((w, i) => hasValue(col.getValue(w, i)));
-    });
-
-    const tableColumn = activeColumns.map((c) => c.header);
-
-    const tableRows = filteredWindows.map((w, i) =>
-      activeColumns.map((c) => {
-        const val = c.getValue(w, i);
-        if (val === null || val === undefined) return "";
-        return val;
-      })
+  if (tripInput) {
+    filteredWindows = windows.filter(
+      (w) => (w?.trip?.id ?? w?.tripId)?.toString() === tripInput
     );
 
-   const numericHeaders = new Set(["Qty", "SqFt", "Weight", "R Mtr"]);
+    if (filteredWindows.length === 0) {
+      return alert("No Material found for the entered Trip ID.");
+    }
 
-   const totalRow = activeColumns.map((col, colIdx) => {
-     // Sr No. column — always blank in total row
-     if (col.header === "Sr No.") return "";
-
-     // First non-numeric, non-SrNo column gets the "TOTAL" label
-     if (!numericHeaders.has(col.header)) {
-       return colIdx === 1 ? "TOTAL" : "";
-     }
-
-     const sum = filteredWindows.reduce((acc, w, i) => {
-       const val = parseFloat(col.getValue(w, i));
-       return acc + (isNaN(val) ? 0 : val);
-     }, 0);
-
-     // Qty = integer, others = 2 decimal places
-     return col.header === "Qty"
-       ? String(Math.round(sum))
-       : sum.toFixed(2);
-   });
-
-    tableRows.push(totalRow);
-    const doc = new jsPDF("landscape");
-    const refWindow = filteredWindows[0];
-    const refTrip   = refWindow?.trip || {};
-
-    const towerDisplay =
-      dynamicTowerName !== "N/A"
-        ? dynamicTowerName
-        : towers.find((t) => t.towerId == selectedTower)?.towerName || "N/A";
-
-    // --- LOGO (unchanged) ---
-    const cloudinaryLogoUrl =
-      "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+    // ── Fetch project log for dispatch info ──────────────────
     try {
-      doc.addImage(cloudinaryLogoUrl, "PNG", 35, 8, 38, 20);
-      doc.setDrawColor(220, 220, 220);
-      doc.line(14, 33, 283, 33);
-    } catch (e) {
-      console.error("Logo failed to load", e);
+      const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
+      if (response.data && response.data.length > 0) {
+        const latestLog = response.data[0];
+
+        // Actual/created date — try dates endpoint first, fallback to log
+        try {
+          const dateRes = await axios.get(`${API_URL}/logs/trip/${tripInput}/dates`);
+          if (dateRes.data) {
+            actualDate = dateRes.data.actualDate;
+          }
+        } catch (err) {
+          // endpoint may not exist — silently skip
+        }
+
+        dispatchInfo = {
+          projectName:     latestLog.projectName     || "N/A",
+          clientName:      "N/A",
+          dcNo:            latestLog.dcNo            || "N/A",
+          workOrderNumber: latestLog.workOrderNumber || "N/A",
+          codeNo:          latestLog.codeNo          || "N/A",
+        };
+
+        // Fetch client name + tower from project
+        if (latestLog.projectName) {
+          try {
+            const projectRes = await axios.get(
+              `${API_URL}/projects/by-name/${encodeURIComponent(latestLog.projectName)}`
+            );
+            dispatchInfo.clientName = projectRes.data?.clientName || "N/A";
+
+            const pId = projectRes.data?.projectId;
+            const refWindow = filteredWindows[0];
+            const tId = refWindow?.tower?.towerId || refWindow?.towerId || selectedTower;
+            if (pId && tId) {
+              const towerRes   = await axios.get(`${API_URL}/api/towers/project/${pId}`);
+              const foundTower = towerRes.data.find((t) => t.towerId == tId);
+              if (foundTower) dynamicTowerName = foundTower.towerName;
+            }
+          } catch (err) {
+            console.error("Error fetching project/tower info:", err);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching project log for Trip:", error);
     }
 
-    // --- HEADER (unchanged) ---
-    doc.setFontSize(16);
-    doc.setTextColor(40, 40, 40);
-    doc.text("ONEDEO LEELA FAÇADE SYSTEMS PRIVATE LIMITED", 160, 18, { align: "center" });
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Building No/Flat No 327, Bopgaon Chowk, Pune, Maharashtra 412301", 160, 25, { align: "center" });
-
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-
-    // Left side info (unchanged positions)
-    doc.text(`Project Name: ${dispatchInfo.projectName}`,      14, 42);
-    doc.text(`Tower Name: ${towerDisplay}`,                    14, 48);
-    doc.text(`DC No: ${dispatchInfo.dcNo}`,                    14, 54);
-    doc.text(`Work Order No: ${dispatchInfo.workOrderNumber}`, 14, 60);
-    doc.text(`Code No: ${dispatchInfo.codeNo}`,                14, 66);
-
-    // ── CHANGE 3a: Material Delivery Date — shown only when backend returns a value ──
-    // Previously always shown as "N/A" when userDate was null.
-    // Now: shown only when userDate exists AND differs from createdAt date.
-    // Position unchanged (14, 72).
-    if (materialDeliveryDate) {
-      doc.text(`Material Delivery Date: ${materialDeliveryDate}`, 14, 72);
+    // ── Fetch Material Delivery Date ──────────────────────────
+    try {
+      const mdRes = await axios.get(
+        `${API_URL}/api/items/material-delivery-date/${tripInput}`
+      );
+      if (mdRes.status === 200 && mdRes.data) {
+        materialDeliveryDate = mdRes.data; // already formatted as dd/MM/yyyy by backend
+      }
+    } catch (err) {
+      if (err.response?.status !== 204) {
+        console.error("Error fetching material delivery date:", err);
+      }
     }
 
-    // Right side info (unchanged)
-    doc.text(`Trip ID: ${tripInput || refTrip.id || "All"}`, 220, 42);
+    // ── Fetch Driver Mobile ───────────────────────────────────
+    try {
+      const mobileRes = await axios.get(`${API_URL}/api/trips/${tripInput}/driver-mobile`);
+      console.log("📱 Driver mobile raw response:", mobileRes.data, typeof mobileRes.data);
+      const rawMobile = mobileRes.data;
+      if (rawMobile && typeof rawMobile === "object") {
+        driverMobile = String(rawMobile.mobile || rawMobile.driverMobile || "").trim() || "N/A";
+      } else if (rawMobile !== null && rawMobile !== undefined) {
+        driverMobile = String(rawMobile).trim() || "N/A";
+      }
+      console.log("✅ Driver mobile fetched:", driverMobile);
+    } catch (err) {
+      console.error("❌ Error fetching driver mobile:", err.response?.status, err.response?.data);
+    }
+  }
 
-    const actualDateFormatted = actualDate
-      ? formatDateDMY(actualDate)
-      : formatDateDMY(new Date());
-    doc.text(`Date: ${actualDateFormatted}`,                220, 48);
-    doc.text(`Vehicle No: ${refTrip.vehicleNumber || "N/A"}`, 220, 54);
-    doc.text(`Driver Name: ${refTrip.driverName   || "N/A"}`, 220, 60);
-    doc.text(`Trip Status: ${refTrip.status       || "N/A"}`, 220, 66);
+  if (filteredWindows.length === 0) {
+    return alert("No data available to generate PDF.");
+  }
 
-    // --- TABLE (unchanged) ---
- autoTable(doc, {
-   head:       [tableColumn],
-   body:       tableRows,
-   startY:     78,
-   theme:      "grid",
-   styles:     { fontSize: 7 },
-   headStyles: { fillColor: [44, 62, 80] },
-   didParseCell: function (data) {
-     if (data.section === "body" && data.row.index === tableRows.length - 1) {
-       data.cell.styles.fontStyle  = "bold";
-       data.cell.styles.fillColor  = [230, 230, 230];
-       data.cell.styles.textColor  = [0, 0, 0];
-     }
-   },
- });
+  // ── Fetch column presence from backend ────────────────────────
+  let serverColumnPresence = null;
+  if (tripInput) {
+    try {
+      const cpRes = await axios.get(
+        `${API_URL}/api/items/column-presence/${tripInput}`
+      );
+      serverColumnPresence = cpRes.data;
+    } catch (err) {
+      console.error("Column presence endpoint unavailable, falling back to client-side check:", err);
+    }
+  }
 
-    const finalY = (doc.lastAutoTable?.finalY || 78) + 10;
+  // ── Define ALL columns ────────────────────────────────────────
+  const allColumns = [
+    { header: "Sr No.",      mandatory: true,  getValue: (w, i) => i + 1 },
+    { header: "Win Sr No",   mandatory: false, getValue: (w) => w.winSrNo },
+    {
+      header: "Floor No", mandatory: false,
+      getValue: (w) => {
+        const val = w?.floor?.floorNumber ?? w?.floorNo;
+        return val === "" || val === undefined ? null : val;
+      },
+    },
+    {
+      header: "Flat No", mandatory: false,
+      getValue: (w) => {
+        const val = w?.flat?.flatNumber ?? w?.flat?.flatNo ?? w.flatNo;
+        return val === "" || val === undefined ? null : val;
+      },
+    },
+    { header: "Location",    mandatory: false, getValue: (w) => w.location },
+    { header: "Window Code", mandatory: false, getValue: (w) => w.windowCode ?? w.window_code ?? w.WindowCode },
+    { header: "Job Card No", mandatory: false, getValue: (w) => w.jobCardNo },
+    { header: "Priority",    mandatory: false, getValue: (w) => w.priority },
+    { header: "Description", mandatory: false, getValue: (w) => w.description },
+    { header: "Width",       mandatory: false, getValue: (w) => (w.width  != null && w.width  !== 0) ? w.width  : null },
+    { header: "Height",      mandatory: false, getValue: (w) => (w.height != null && w.height !== 0) ? w.height : null },
+    { header: "Qty",         mandatory: false, getValue: (w) => (w.qty    != null && w.qty    !== 0) ? w.qty    : null },
+    { header: "Unit",        mandatory: false, getValue: (w) => w.unit },
+    { header: "SqFt",        mandatory: false, getValue: (w) => (w.sqFt   != null && w.sqFt   !== 0) ? w.sqFt   : null },
+    { header: "Weight",      mandatory: false, getValue: (w) => (w.weight != null && w.weight !== 0) ? w.weight : null },
+    { header: "R Mtr",       mandatory: false, getValue: (w) => w.rMtr ?? w.rmtr ?? w.rMeter ?? w.r_mtr },
+    { header: "Remarks",     mandatory: false, getValue: (w) => w.remarks },
+  ];
 
+  const activeColumns = allColumns.filter((col) => {
+    if (col.mandatory) return true;
+    if (serverColumnPresence && col.header in serverColumnPresence) {
+      return serverColumnPresence[col.header] === true;
+    }
+    return filteredWindows.some((w, i) => hasValue(col.getValue(w, i)));
+  });
 
-     // ====== NEW TOTAL LOGIC END ======
-    doc.text("Prepared By: ________________",                 14, finalY + 20);
-    doc.text("Checked By: ________________",                 110, finalY + 20);
-    doc.text("Received By: ________________",                210, finalY + 20);
+  const tableColumn = activeColumns.map((c) => c.header);
 
-    doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
+  const tableRows = filteredWindows.map((w, i) =>
+    activeColumns.map((c) => {
+      const val = c.getValue(w, i);
+      if (val === null || val === undefined) return "";
+      return val;
+    })
+  );
+
+  const numericHeaders = new Set(["Qty", "SqFt", "Weight", "R Mtr"]);
+
+  const totalRow = activeColumns.map((col, colIdx) => {
+    if (col.header === "Sr No.") return "";
+    if (!numericHeaders.has(col.header)) {
+      return colIdx === 1 ? "TOTAL" : "";
+    }
+    const sum = filteredWindows.reduce((acc, w, i) => {
+      const val = parseFloat(col.getValue(w, i));
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
+    return col.header === "Qty"
+      ? String(Math.round(sum))
+      : sum.toFixed(2);
+  });
+
+  tableRows.push(totalRow);
+
+  // ═══════════════════════════════════════════════════════════════
+  // PDF SETUP  — PORTRAIT  (210 × 297 mm)
+  // ═══════════════════════════════════════════════════════════════
+  const doc       = new jsPDF("portrait");
+  const refWindow = filteredWindows[0];
+  const refTrip   = refWindow?.trip || {};
+
+  const pageW = doc.internal.pageSize.getWidth();   // 210
+  const pageC = pageW / 2;                          // 105  — horizontal centre
+
+  const towerDisplay =
+    dynamicTowerName !== "N/A"
+      ? dynamicTowerName
+      : towers.find((t) => t.towerId == selectedTower)?.towerName || "N/A";
+
+  const cloudinaryLogoUrl =
+    "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+
+  // ═══════════════════════════════════════════════════════════════
+  // LAYOUT CONSTANTS
+  // ═══════════════════════════════════════════════════════════════
+  const boxLeft  = 10;
+  const boxRight = pageW - 10;                      // 200
+
+  // Info-column X positions (portrait widths are narrower)
+  const leftLabel         = 14;
+  const leftValue         = 57;
+  const rightLabel        = 112;
+  const rightValue        = 150;
+  const dividerX          = 108;   // vertical divider between left / right info columns
+  const maxTextWidthLeft  = 48;
+  const maxTextWidthRight = 45;
+
+  const rowGap = 7;
+  // Address block: company name y=14, then 8 address lines × 4.2 = 33.6 → last line ≈ y 53.4
+  // dividerY sits just below with a small gap
+  const dividerY   = 57;           // horizontal line separating address from info rows
+  const infoStartY = 64;           // first info row — 7 mm below dividerY (same rhythm as rowGap)
+  const boxTop     = 8;
+
+  const fitText = (text, maxWidth, fontSize = 9) => {
+    doc.setFontSize(fontSize);
+    const strText = String(text ?? "N/A");
+    const lines   = doc.splitTextToSize(strText, maxWidth);
+    return lines[0] + (lines.length > 1 ? "..." : "");
   };
+
+  // ── LEFT info rows ──────────────────────────────────────────
+  const leftRows = [
+    { label: "Client Name",    value: dispatchInfo.clientName },
+    { label: "Project Name",   value: dispatchInfo.projectName },
+    { label: "Tower Name",     value: towerDisplay },
+    { label: "DC No",          value: dispatchInfo.dcNo },
+    { label: "Work Order No.", value: dispatchInfo.workOrderNumber },
+    { label: "Code No.",       value: dispatchInfo.codeNo },
+    ...(materialDeliveryDate
+      ? [{ label: "Delivery Date", value: materialDeliveryDate }]
+      : []),
+  ];
+
+  // ── RIGHT info rows ─────────────────────────────────────────
+  const actualDateFormatted = actualDate
+    ? formatDateDMY(actualDate)
+    : formatDateDMY(new Date());
+
+  const rightRows = [
+    { label: "Trip ID",    value: String(tripInput || refTrip.id || "All") },
+    { label: "Date",       value: actualDateFormatted },
+    { label: "Vehicle No", value: refTrip.vehicleNumber || "N/A" },
+    { label: "Driver",     value: refTrip.driverName    || "N/A" },
+    { label: "Driver Mo.", value: driverMobile },
+   // { label: "Status",     value: refTrip.status        || "N/A" },
+    ...(extraName    ? [{ label: "Recv. Name",    value: extraName    }] : []),
+    ...(extraContact ? [{ label: "Recv. Contact", value: extraContact }] : []),
+  ];
+
+  const maxInfoRows = Math.max(leftRows.length, rightRows.length);
+  const boxBottom   = infoStartY + (maxInfoRows - 1) * rowGap + 8;
+  const boxHeight   = boxBottom - boxTop;
+
+  // ── Outer border box ────────────────────────────────────────
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.rect(boxLeft, boxTop, boxRight - boxLeft, boxHeight);
+
+  // ── Logo (top-left inside box) ───────────────────────────────
+  try {
+    doc.addImage(cloudinaryLogoUrl, "PNG", 12, 10, 28, 18);
+  } catch (e) {
+    console.error("Logo failed to load", e);
+  }
+
+  // ── Company name — centred on portrait page ──────────────────
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text(
+    "ONEDEO LEELA FACADE SYSTEMS PRIVATE LIMITED",
+    pageC, 15,
+    { align: "center" }
+  );
+
+  // ── Address block — every line centred on portrait page ──────
+  // 8 lines × 4.2 mm spacing, first line at y = 21
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  [
+    "Building No/Flat No 327",
+    "Road/Street: Ganeshwadi Road, Bhopgaon Chowk",
+    "Nearby Landmark: Bhopgaon Bus Stand",
+    "Locality/Sub Locality: Bhopgaon",
+    "City/Town/Village: Purandhar Fort",
+    "Pune, Maharashtra, 412301",
+    "Tel. No.: - 9011333735",
+    "E-Mail :- info@onedlfs.com",
+  ].forEach((line, i) => {
+    doc.text(line, pageC, 21 + i * 4.5, { align: "center" });
+  });
+
+  // ── Horizontal divider below address block ──────────────────
+  doc.setLineWidth(0.3);
+  doc.line(boxLeft, dividerY, boxRight, dividerY);
+
+  // ── Vertical divider between left / right info columns ──────
+  doc.line(dividerX, dividerY, dividerX, boxBottom);
+
+  // ── Left info rows ───────────────────────────────────────────
+  doc.setFontSize(9);
+  leftRows.forEach((row, i) => {
+    const y = infoStartY + i * rowGap;
+    doc.setFont("helvetica", "bold");
+    doc.text(row.label, leftLabel, y);
+    doc.text(":", leftValue - 3, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(fitText(row.value, maxTextWidthLeft), leftValue, y);
+  });
+
+  // ── Right info rows ──────────────────────────────────────────
+  doc.setFontSize(9);
+  rightRows.forEach((row, i) => {
+    const y = infoStartY + i * rowGap;
+    doc.setFont("helvetica", "bold");
+    doc.text(row.label, rightLabel, y);
+    doc.text(":", rightValue - 3, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(fitText(row.value, maxTextWidthRight), rightValue, y);
+  });
+
+  // ── Disclaimer strip ─────────────────────────────────────────
+  const disclaimerY = boxBottom + 5;
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.text(
+    "Please receive the following goods dispatched in good order and condition & kindly return the duplicate duly signed.",
+    boxLeft, disclaimerY
+  );
+  doc.setLineWidth(0.3);
+  doc.line(boxLeft, disclaimerY + 2, boxRight, disclaimerY + 2);
+
+  // ═══════════════════════════════════════════════════════════════
+  // TABLE
+  // ═══════════════════════════════════════════════════════════════
+  const tableStartY = disclaimerY + 6;
+
+  autoTable(doc, {
+    head:       [tableColumn],
+    body:       tableRows,
+    startY:     tableStartY,
+    theme:      "grid",
+    styles:     { fontSize: 7 },
+    headStyles: { fillColor: [44, 62, 80] },
+    margin:     { left: 10, right: 10 },
+    didParseCell: function (data) {
+      if (data.section === "body" && data.row.index === tableRows.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [230, 230, 230];
+        data.cell.styles.textColor = [0, 0, 0];
+      }
+    },
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // FOOTER — with page overflow protection
+  // ═══════════════════════════════════════════════════════════════
+  const finalY       = (doc.lastAutoTable?.finalY || tableStartY) + 10;
+  const pageHeight   = doc.internal.pageSize.getHeight();
+  const footerHeight = 30;
+
+  let footerY;
+  if (finalY + footerHeight > pageHeight - 10) {
+    doc.addPage();
+    footerY = 20;
+  } else {
+    footerY = finalY;
+  }
+
+  doc.setLineWidth(0.3);
+  doc.line(boxLeft, footerY, boxRight, footerY);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
+  doc.text("Prepared By: ________________",  14,  footerY + 20);
+  doc.text("Checked By: ________________",   75,  footerY + 20);
+  doc.text("Received By: ________________",  148, footerY + 20);
+
+  doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
+};
+
+
 
   const filteredWindows = windows.filter((w) => {
     if (tripIdFilter && (w?.trip?.id ?? w?.tripId)?.toString() !== tripIdFilter) return false;

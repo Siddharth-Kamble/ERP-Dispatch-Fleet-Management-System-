@@ -281,17 +281,25 @@ const formatDate = (dateStr) => {
   return new Date(dateStr).toLocaleDateString("en-IN");
 };
 
-const downloadPDF = async () => {
-  const tripInput = prompt("Enter Trip ID (optional):")?.trim();
-  let filteredWindows = windows;
-  let tripDateData = null;
-  let dispatchInfo = {
-    projectName: "N/A",
-    dcNo: "N/A",
-    workOrderNumber: "N/A",
-    codeNo: "N/A",
-  };
 
+
+const downloadPDF = async () => {
+  const tripInput    = prompt("Enter Trip ID (optional):")?.trim();
+  const extraName    = prompt("Enter Receiver Name (optional):")?.trim() || "";
+  const extraContact = prompt("Enter Receiver Contact No (optional):")?.trim() || "";
+
+  let filteredWindows = windows;
+  let tripDateData    = null;
+  let driverMobile    = "N/A";
+  let dispatchInfo = {
+    projectName:         "N/A",
+    clientName:          "N/A",
+    dcNo:                "N/A",
+    workOrderNumber:     "N/A",
+    codeNo:              "N/A",
+    userDate:            null,
+    materialDeliveryDate:"N/A",
+  };
   let dynamicTowerName = "N/A";
 
   if (tripInput) {
@@ -303,52 +311,79 @@ const downloadPDF = async () => {
       return alert("No windows found for the entered Trip ID.");
     }
 
+    // 1. Fetch trip date comparison — independent
     try {
-      // 1. Fetch trip date comparison
-      try {
-        const dateRes = await axios.get(`${API_URL}/logs/trip/${tripInput}/dates`);
-        tripDateData = dateRes.data;
-      } catch (err) {
-        console.error("Error fetching trip date comparison:", err);
-      }
+      const dateRes = await axios.get(`${API_URL}/logs/trip/${tripInput}/dates`);
+      tripDateData = dateRes.data;
+    } catch (err) {
+      console.error("Error fetching trip date comparison:", err);
+    }
 
-      // 2. Fetch Project Log using Trip ID
-      try {
-        const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
-        if (response.data && response.data.length > 0) {
-          const tripLog = response.data.find(
-            (log) => log.tripId?.toString() === tripInput
-          );
+    // 2. Fetch Project Log using Trip ID — independent
+    try {
+      const response = await axios.get(`${API_URL}/logs/trip/${tripInput}`);
+      if (response.data && response.data.length > 0) {
+        const tripLog = response.data.find(
+          (log) => log.tripId?.toString() === tripInput
+        );
+        if (tripLog) {
+          dispatchInfo = {
+            projectName: tripLog.projectName || "N/A",
+            clientName:  "N/A",
+            dcNo:        tripLog.dcNo || "N/A",
+            workOrderNumber: tripLog.workOrderNumber || "N/A",
+            codeNo:      tripLog.codeNo || "N/A",
+            userDate:    tripLog.userDate || null,
+            materialDeliveryDate: tripLog.materialDeliveryDate
+              ? new Date(tripLog.materialDeliveryDate).toLocaleDateString("en-IN")
+              : "N/A",
+          };
 
-          if (tripLog) {
-            dispatchInfo = {
-              projectName: tripLog.projectName || "N/A",
-              dcNo: tripLog.dcNo || "N/A",
-              workOrderNumber: tripLog.workOrderNumber || "N/A",
-              codeNo: tripLog.codeNo || "N/A",
-              userDate: tripLog.userDate || null
-            };
+          if (tripLog.projectName) {
+            try {
+              const projectRes = await axios.get(
+                `${API_URL}/projects/by-name/${encodeURIComponent(tripLog.projectName)}`
+              );
+              dispatchInfo.clientName = projectRes.data?.clientName || "N/A";
+            } catch (err) {
+              console.error("Error fetching client name:", err);
+            }
           }
         }
-      } catch (err) {
-        console.error("Error fetching project log:", err);
       }
+    } catch (err) {
+      console.error("Error fetching project log:", err);
+    }
 
-      // ✅ FIX: Tower name fetch is NOW independent — runs always when tripInput exists
-      // Previously it was buried inside if(tripLog) → if(dispatchInfo.projectName)
-      // which caused it to silently skip when those conditions failed
-      try {
-        const towerRes = await axios.get(`${API_URL}/logs/tower/${tripInput}`);
-        if (towerRes.data) {
-          dynamicTowerName = towerRes.data.towerName || "N/A";
-          console.log("✅ Tower name fetched:", dynamicTowerName);
-        }
-      } catch (err) {
-        console.error("Error fetching tower name:", err);
+    // 3. Tower name — independent, robust string + object handling
+    try {
+      const towerRes = await axios.get(`${API_URL}/api/towers/trip/${tripInput}`);
+      console.log("🏗️ Tower raw response:", towerRes.data, typeof towerRes.data);
+      const raw = towerRes.data;
+      if (typeof raw === "string" && raw.trim() !== "") {
+        dynamicTowerName = raw.trim();
+      } else if (raw && typeof raw === "object") {
+        dynamicTowerName =
+          String(raw.towerName || raw.name || raw.tower || "").trim() || "N/A";
       }
+      console.log("✅ Tower name resolved:", dynamicTowerName);
+    } catch (err) {
+      console.error("❌ Error fetching tower name:", err.response?.status, err.response?.data);
+    }
 
-    } catch (error) {
-      console.error("Error fetching project/tower details for Trip:", error);
+    // 4. Driver Mobile — independent, robust string + object handling
+    try {
+      const mobileRes = await axios.get(`${API_URL}/api/trips/${tripInput}/driver-mobile`);
+      console.log("📱 Driver mobile raw response:", mobileRes.data, typeof mobileRes.data);
+      const rawMobile = mobileRes.data;
+      if (rawMobile && typeof rawMobile === "object") {
+        driverMobile = String(rawMobile.mobile || rawMobile.driverMobile || "").trim() || "N/A";
+      } else if (rawMobile !== null && rawMobile !== undefined) {
+        driverMobile = String(rawMobile).trim() || "N/A";
+      }
+      console.log("✅ Driver mobile fetched:", driverMobile);
+    } catch (err) {
+      console.error("❌ Error fetching driver mobile:", err.response?.status, err.response?.data);
     }
   }
 
@@ -356,69 +391,175 @@ const downloadPDF = async () => {
     return alert("No data available to generate PDF.");
   }
 
-  const doc = new jsPDF("landscape");
+  console.log("📄 dynamicTowerName:", dynamicTowerName);
+  console.log("📄 driverMobile:", driverMobile);
+  console.log("📄 dispatchInfo:", dispatchInfo);
+
+  const doc       = new jsPDF("portrait");
   const refWindow = filteredWindows[0];
-  const refTrip = refWindow?.trip || {};
+  const refTrip   = refWindow?.trip || {};
 
-  // Fallback to selectedTower state if dynamic fetch failed
-  const towerDisplay = dynamicTowerName !== "N/A"
-    ? dynamicTowerName
-    : (towers.find(t => t.towerId == selectedTower)?.towerName || "N/A");
+  const towerDisplay =
+    dynamicTowerName !== "N/A"
+      ? dynamicTowerName
+      : towers.find((t) => t.towerId == selectedTower)?.towerName || "N/A";
 
-  const cloudinaryLogoUrl = "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+  console.log("📄 towerDisplay:", towerDisplay);
 
+  const cloudinaryLogoUrl =
+    "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+
+  // ═══════════════════════════════════════════════════════════
+  // LAYOUT CONSTANTS  (portrait page = 210 × 297 mm)
+  // ═══════════════════════════════════════════════════════════
+  const boxLeft           = 10;
+  const boxRight          = 200;
+  const boxTop            = 8;
+
+  // Column X positions
+  const leftLabel         = 14;
+  const leftValue         = 57;
+  const rightLabel        = 112;
+  const rightValue        = 150;
+  const dividerX          = 108;   // vertical divider between left / right info columns
+  const maxTextWidthLeft  = 48;
+  const maxTextWidthRight = 45;
+
+  const rowGap     = 7;
+  // Address block: company name at y=14, then 8 lines × 4.2 = 33.6 → last line at ~47.8
+  // dividerY sits just below that with a small gap
+  const dividerY   = 53;           // horizontal line separating address from info rows
+  const infoStartY = 60;           // first info row (Client Name) — 7 mm below dividerY
+
+  const fitText = (text, maxWidth, fontSize = 9) => {
+    doc.setFontSize(fontSize);
+    const strText = String(text ?? "N/A");
+    const lines   = doc.splitTextToSize(strText, maxWidth);
+    return lines[0] + (lines.length > 1 ? "..." : "");
+  };
+
+  let materialDeliveryDisplay = dispatchInfo.materialDeliveryDate;
+  let actualDateDisplay       = "N/A";
+  if (tripDateData) {
+    materialDeliveryDisplay =
+      formatDate(tripDateData.userDate) || dispatchInfo.materialDeliveryDate;
+    actualDateDisplay = formatDate(tripDateData.actualDate) || "N/A";
+  }
+
+  // ── LEFT rows ───────────────────────────────────────────────
+  const leftRows = [
+    { label: "Client Name",    value: dispatchInfo.clientName },
+    { label: "Project Name",   value: dispatchInfo.projectName },
+    { label: "Tower Name",     value: towerDisplay },
+    { label: "Code No.",       value: dispatchInfo.codeNo },
+    { label: "Work Order No.", value: dispatchInfo.workOrderNumber },
+    { label: "DC No",          value: dispatchInfo.dcNo },
+    { label: "Delivery Date",  value: materialDeliveryDisplay },
+  ];
+
+  // ── RIGHT rows ──────────────────────────────────────────────
+  const rightRows = [
+    ...(!tripDateData?.sameDate && actualDateDisplay !== "N/A"
+      ? [{ label: "DC Date",     value: actualDateDisplay }]
+      : []),
+    { label: "Trip ID",       value: String(tripInput || refTrip.id || "All") },
+    { label: "Vehicle No",    value: refTrip.vehicleNumber || "N/A" },
+    { label: "Driver",        value: refTrip.driverName    || "N/A" },
+    { label: "Driver Mo.",    value: driverMobile },
+    ...(extraName    ? [{ label: "Recv. Name",    value: extraName    }] : []),
+    ...(extraContact ? [{ label: "Recv. Contact", value: extraContact }] : []),
+  ];
+
+  const maxInfoRows = Math.max(leftRows.length, rightRows.length);
+  const boxBottom   = infoStartY + (maxInfoRows - 1) * rowGap + 8;
+  const boxHeight   = boxBottom - boxTop;
+
+  // ── Outer border box ────────────────────────────────────────
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.rect(boxLeft, boxTop, boxRight - boxLeft, boxHeight);
+
+  // ── Logo ────────────────────────────────────────────────────
   try {
-    doc.addImage(cloudinaryLogoUrl, "PNG", 35, 8, 38, 20);
-    doc.setDrawColor(220, 220, 220);
-    doc.line(14, 33, 283, 33);
+    doc.addImage(cloudinaryLogoUrl, "PNG", 12, 10, 28, 18);
   } catch (e) {
     console.error("Logo failed to load", e);
   }
 
-  doc.setFontSize(16);
-  doc.setTextColor(40, 40, 40);
-  doc.text("ONEDEO LEELA FAÇADE SYSTEMS PRIVATE LIMITED", 160, 18, { align: "center" });
-
-  doc.setFontSize(8);
-  doc.setTextColor(100, 100, 100);
-  doc.text("Building No/Flat No 327, Bopgaon Chowk, Pune, Maharashtra 412301", 160, 25, { align: "center" });
-
-  doc.setFontSize(10);
+  // ── Company name ────────────────────────────────────────────
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0);
+  doc.text("ONEDEO LEELA FACADE SYSTEMS PRIVATE LIMITED", 105, 14, { align: "center" });
 
-  // Left side Header Info
-  doc.text(`Project Name: ${dispatchInfo.projectName}`, 14, 42);
-  doc.text(`Tower Name: ${towerDisplay}`, 14, 48);
-  doc.text(`DC No: ${dispatchInfo.dcNo}`, 14, 54);
-  doc.text(`Work Order No: ${dispatchInfo.workOrderNumber}`, 14, 60);
-  doc.text(`Code No: ${dispatchInfo.codeNo}`, 14, 66);
-  if (tripDateData) {
-    const materialDate = formatDate(tripDateData.userDate);
-    const actualDate = formatDate(tripDateData.actualDate);
-    console.log("PDF Dates:", materialDate, actualDate);
+  // ── Address block (8 lines × 4.2 mm spacing, starts at y=20) ──
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  [
+    "Building No/Flat No 327",
+    "Road/Street: Ganeshwadi Road, Bhopgaon Chowk",
+    "Nearby Landmark: Bhopgaon Bus Stand",
+    "Locality/Sub Locality: Bhopgaon",
+    "City/Town/Village: Purandhar Fort",
+    "Pune, Maharashtra, 412301",
+    "Tel. No.: - 9011333735",
+    "E-Mail :- info@onedlfs.com",
+  ].forEach((line, i) => {
+    doc.text(line, 105, 20 + i * 4.2, { align: "center" });
+  });
 
-    if (!tripDateData.sameDate) {
-      doc.text(`Material Delivery Date: ${materialDate}`, 14, 72);
-      doc.text(`Actual Date: ${actualDate}`, 14, 78);
-    } else {
-      doc.text(`Delivery Date: ${materialDate}`, 14, 72);
-    }
-  }
+  // ── Horizontal divider below address block ──────────────────
+  doc.setLineWidth(0.3);
+  doc.line(boxLeft, dividerY, boxRight, dividerY);
 
-  // Right side Header Info
-  doc.text(`Trip ID: ${tripInput || refTrip.id || "All"}`, 220, 42);
-  doc.text(`Date: ${new Date().toLocaleDateString()}`, 220, 48);
-  doc.text(`Vehicle No: ${refTrip.vehicleNumber || "N/A"}`, 220, 54);
-  doc.text(`Driver Name: ${refTrip.driverName || "N/A"}`, 220, 60);
-  doc.text(`Trip Status: ${refTrip.status || "N/A"}`, 220, 66);
+  // ── Vertical divider between left / right info columns ──────
+  doc.line(dividerX, dividerY, dividerX, boxBottom);
+
+  // ── Left info rows ───────────────────────────────────────────
+  doc.setFontSize(9);
+  leftRows.forEach((row, i) => {
+    const y = infoStartY + i * rowGap;
+    doc.setFont("helvetica", "bold");
+    doc.text(row.label, leftLabel, y);
+    doc.text(":", leftValue - 3, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(fitText(row.value, maxTextWidthLeft), leftValue, y);
+  });
+
+  // ── Right info rows ──────────────────────────────────────────
+  doc.setFontSize(9);
+  rightRows.forEach((row, i) => {
+    const y = infoStartY + i * rowGap;
+    doc.setFont("helvetica", "bold");
+    doc.text(row.label, rightLabel, y);
+    doc.text(":", rightValue - 3, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(fitText(row.value, maxTextWidthRight), rightValue, y);
+  });
+
+  // ── Disclaimer strip ─────────────────────────────────────────
+  const disclaimerY = boxBottom + 5;
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.text(
+    "Please receive following goods dispatched in good order and condition & Kindly return the duplicate duly signed.",
+    boxLeft, disclaimerY
+  );
+  doc.setLineWidth(0.3);
+  doc.line(boxLeft, disclaimerY + 2, boxRight, disclaimerY + 2);
+
+  // ═══════════════════════════════════════════════════════════
+  // TABLE
+  // ═══════════════════════════════════════════════════════════
+  const tableStartY = disclaimerY + 6;
 
   const tableColumn = [
     "Sr.", "Trip ID", "Win.Sr", "Flat", "Loc", "W.Code",
-    "Description", "Job Card", "Series", "Width", "Height", "Track", "Bottom",
-    "Glass", "Mesh", "Unit", "SqFt"
+    "Description", "Job Card", "Series", "Width", "Height",
+    "Track", "Bottom", "Glass", "Mesh", "Unit", "SqFt",
   ];
 
-  const tableRows = filteredWindows.map((w, index) => [
+  const windowTableRows = filteredWindows.map((w, index) => [
     index + 1,
     w?.trip?.id ?? w?.tripId ?? "N/A",
     w.windowSeriesNumber || "N/A",
@@ -435,10 +576,9 @@ const downloadPDF = async () => {
     w.glassShutter || 0,
     w.meshShutter || 0,
     w.units || 0,
-    w.sqft || 0
+    w.sqft || 0,
   ]);
 
-  // Calculate totals for Track Outer, Bottom Fix, Glass Shutter, Mesh Shutter, Units, SqFt
   const totalTrack  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.trackOuter)   || 0), 0);
   const totalBottom = filteredWindows.reduce((sum, w) => sum + (parseInt(w.bottomFix)    || 0), 0);
   const totalGlass  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.glassShutter) || 0), 0);
@@ -446,53 +586,64 @@ const downloadPDF = async () => {
   const totalUnits  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.units)        || 0), 0);
   const totalSqFt   = filteredWindows.reduce((sum, w) => sum + (parseFloat(w.sqft)       || 0), 0);
 
-  // Totals row — blank cells for columns that don't need a total
   const totalsRow = [
-    "", "", "", "", "", "", "", "", "",   // Sr, Trip ID, Win.Sr, Flat, Loc, W.Code, Description, Job Card, Series
-    "",                                   // Width  — no total
-    "",                                   // Height — no total
-    totalTrack,
-    totalBottom,
-    totalGlass,
-    totalMesh,
-    totalUnits,
-    totalSqFt.toFixed(2)
+    "", "", "", "", "", "", "", "", "", "", "",
+    totalTrack, totalBottom, totalGlass, totalMesh, totalUnits, totalSqFt.toFixed(2),
   ];
 
   autoTable(doc, {
     head: [tableColumn],
-    body: [...tableRows, totalsRow],
-    startY: 75,
+    body: [...windowTableRows, totalsRow],
+    startY: tableStartY,
     theme: "grid",
-    styles: { fontSize: 6.5, cellPadding: 1.5 },
-    headStyles: { fillColor: [44, 62, 80] },
-    columnStyles: {
-      6: { cellWidth: 35 },
+    styles: {
+      fontSize: 6,
+      cellPadding: 1.2,
+      fontStyle: "bold",
     },
-    // Style the totals row — bold + light background to distinguish it
+    headStyles: {
+      fillColor: [44, 62, 80],
+      fontStyle: "bold",
+      fontSize: 6,
+    },
+    columnStyles: { 6: { cellWidth: 22 } },
     didParseCell: function (data) {
-      if (data.row.index === tableRows.length) {
+      if (data.row.index === windowTableRows.length) {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fillColor = [230, 230, 230];
       }
     },
+    margin: { left: 10, right: 10 },
   });
 
-  const finalY = (doc.lastAutoTable?.finalY || 75) + 10;
+  // ═══════════════════════════════════════════════════════════
+  // FOOTER — with page overflow protection
+  // ═══════════════════════════════════════════════════════════
+  const finalY       = (doc.lastAutoTable?.finalY || tableStartY) + 10;
+  const pageHeight   = doc.internal.pageSize.getHeight();
+  const footerHeight = 30;
 
-  doc.setFontSize(10);
-  doc.text(`Total SqFt: ${totalSqFt.toFixed(2)}`, 250, finalY);
-  doc.text("Prepared By: ________________", 14, finalY + 20);
-  doc.text("Checked By: ________________", 110, finalY + 20);
-  doc.text("Received By: ________________", 210, finalY + 20);
+  let footerY;
+  if (finalY + footerHeight > pageHeight - 10) {
+    doc.addPage();
+    footerY = 20;
+  } else {
+    footerY = finalY;
+  }
+
+  doc.setLineWidth(0.3);
+  doc.line(10, footerY, 200, footerY);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
+  doc.text(`Total SqFt: ${totalSqFt.toFixed(2)}`, 155, footerY + 8);
+  doc.text("Prepared By: ________________", 10,  footerY + 20);
+  doc.text("Checked By: ________________",  75,  footerY + 20);
+  doc.text("Recv. Sign & Stamp: ________", 145,  footerY + 20);
 
   doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
 };
-
-
-
-
-
 
   const filteredWindowsByCriteria = windows.filter((w) => {
     if (tripIdFilter && (w?.trip?.id ?? w?.tripId)?.toString() !== tripIdFilter) return false;

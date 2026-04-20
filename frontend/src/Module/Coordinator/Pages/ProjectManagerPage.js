@@ -120,57 +120,110 @@
                  alert("An error occurred while preparing the Excel report.");
              }
          };
+//
+//     const handleCreateOrUpdate = async (e) => {
+//         e.preventDefault();
+//
+//         try {
+//             let savedProject;
+//
+//             // ✅ CREATE OR UPDATE PROJECT
+//             if (isEditing) {
+//                 const res = await axios.put(`${API_BASE_URL}/${newProject.projectId}`, newProject);
+//                 savedProject = res.data;
+//                 alert("Project Record Updated Successfully ✅");
+//             } else {
+//                 const res = await axios.post(API_BASE_URL, newProject);
+//                 savedProject = res.data;
+//                 alert("New Project Registered Successfully ✅");
+//             }
+//
+//             // ✅ DELETE OLD TOWERS (ONLY IN EDIT MODE)
+//             if (isEditing && savedProject?.projectId) {
+//                 const existingTowers = await axios.get(`${TOWER_API}/project/${savedProject.projectId}`);
+//
+//                 for (let t of existingTowers.data) {
+//                     await axios.delete(`${TOWER_API}/${t.towerId}`);
+//                 }
+//             }
+//
+//             // ✅ SAVE NEW TOWERS
+//             if (towerInputs.length > 0 && savedProject?.projectId) {
+//                 for (let t of towerInputs) {
+//                     if (!t.towerName || t.towerName.trim() === "") continue;
+//
+//                     await axios.post(`${TOWER_API}/project/${savedProject.projectId}`, {
+//                         towerName: t.towerName
+//                     });
+//                 }
+//             }
+//
+//             // ✅ RESET STATES (IMPORTANT)
+//             setTowerCount(0);
+//             setTowerInputs([]);
+//             setTowers([]); // clear UI list
+//
+//             resetForm();
+//             loadProjects();
+//
+//         } catch (err) {
+//             console.error(err);
+//             alert("Action failed. Check API connectivity.");
+//         }
+//     };
 
-     const handleCreateOrUpdate = async (e) => {
-         e.preventDefault();
 
-         try {
-             let savedProject;
+// FIND THIS (lines ~100-146) and REPLACE:
+const handleCreateOrUpdate = async (e) => {
+    e.preventDefault();
 
-             // ✅ CREATE OR UPDATE PROJECT
-             if (isEditing) {
-                 const res = await axios.put(`${API_BASE_URL}/${newProject.projectId}`, newProject);
-                 savedProject = res.data;
-                 alert("Project Record Updated Successfully ✅");
-             } else {
-                 const res = await axios.post(API_BASE_URL, newProject);
-                 savedProject = res.data;
-                 alert("New Project Registered Successfully ✅");
-             }
+    try {
+        let savedProject;
 
-             // ✅ DELETE OLD TOWERS (ONLY IN EDIT MODE)
-             if (isEditing && savedProject?.projectId) {
-                 const existingTowers = await axios.get(`${TOWER_API}/project/${savedProject.projectId}`);
+        if (isEditing) {
+            const res = await axios.put(`${API_BASE_URL}/${newProject.projectId}`, newProject);
+            savedProject = res.data;
+            alert("Project Record Updated Successfully ✅");
+        } else {
+            const res = await axios.post(API_BASE_URL, newProject);
+            savedProject = res.data;
+            alert("New Project Registered Successfully ✅");
+        }
 
-                 for (let t of existingTowers.data) {
-                     await axios.delete(`${TOWER_API}/${t.towerId}`);
-                 }
-             }
+        // ❌ REMOVE THIS ENTIRE BLOCK — this is what causes the error
+        // if (isEditing && savedProject?.projectId) {
+        //     const existingTowers = await axios.get(`${TOWER_API}/project/${savedProject.projectId}`);
+        //     for (let t of existingTowers.data) {
+        //         await axios.delete(`${TOWER_API}/${t.towerId}`);
+        //     }
+        // }
 
-             // ✅ SAVE NEW TOWERS
-             if (towerInputs.length > 0 && savedProject?.projectId) {
-                 for (let t of towerInputs) {
-                     if (!t.towerName || t.towerName.trim() === "") continue;
+        // ✅ TOWERS — only act if user actually typed something
+        const hasNewTowerInput = towerInputs.some(t => t.towerName?.trim() !== "");
 
-                     await axios.post(`${TOWER_API}/project/${savedProject.projectId}`, {
-                         towerName: t.towerName
-                     });
-                 }
-             }
+        if (hasNewTowerInput && savedProject?.projectId) {
+            // Add new towers (works for both create and edit)
+            for (let t of towerInputs) {
+                if (!t.towerName || t.towerName.trim() === "") continue;
+                await axios.post(`${TOWER_API}/project/${savedProject.projectId}`, {
+                    towerName: t.towerName
+                });
+            }
+        }
+        // If user left tower inputs empty in edit mode → existing towers untouched ✅
 
-             // ✅ RESET STATES (IMPORTANT)
-             setTowerCount(0);
-             setTowerInputs([]);
-             setTowers([]); // clear UI list
+        setTowerCount(0);
+        setTowerInputs([]);
+        setTowers([]);
+        resetForm();
+        loadProjects();
 
-             resetForm();
-             loadProjects();
+    } catch (err) {
+        console.error(err);
+        alert("Action failed: " + (err.response?.data?.message || err.message));
+    }
+};
 
-         } catch (err) {
-             console.error(err);
-             alert("Action failed. Check API connectivity.");
-         }
-     };
 
         const handleDelete = async (e, id) => {
             e.stopPropagation();

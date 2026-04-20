@@ -46,6 +46,6 @@ public class Project {
     private Double totalAreaSqFt;
     private Integer numberOfFloors;
 
-    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "project", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private List<Tower> towers;
 }

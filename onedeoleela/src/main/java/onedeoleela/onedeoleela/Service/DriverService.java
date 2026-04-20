@@ -2,8 +2,10 @@ package onedeoleela.onedeoleela.Service;
 
 import lombok.RequiredArgsConstructor;
 import onedeoleela.onedeoleela.Entity.Driver;
+import onedeoleela.onedeoleela.Entity.Trip;
 import onedeoleela.onedeoleela.Entity.User;
 import onedeoleela.onedeoleela.Repository.DriverRepository;
+import onedeoleela.onedeoleela.Repository.TripRepository;
 import onedeoleela.onedeoleela.Repository.UserRepository;
 import org.springframework.stereotype.Service;
 
@@ -13,11 +15,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DriverService {
 
-    private final DriverRepository repo;
+    private final DriverRepository driverRepository;
     private final UserRepository userRepository;
+    private final TripRepository tripRepository;
 
     public List<Driver> getAllDrivers() {
-        return repo.findAll();
+        return driverRepository.findAll();
     }
 
     public Driver create(Driver d) {
@@ -27,12 +30,12 @@ public class DriverService {
 
         d.setECode(user.getECode().intValue());
 
-        return repo.save(d);
+        return driverRepository.save(d);
     }
 
     public Driver update(Long id, Driver d) {
 
-        Driver old = repo.findById(id)
+        Driver old = driverRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
 
         User user = userRepository.findByFullName(d.getName())
@@ -44,14 +47,32 @@ public class DriverService {
         old.setJoiningDate(d.getJoiningDate());
         old.setECode(user.getECode().intValue());
 
-        return repo.save(old);
+        return driverRepository.save(old);
     }
 
     public void delete(Long id) {
-        repo.deleteById(id);
+        driverRepository.deleteById(id);
     }
 
     public List<String> getAllDriverNames() {
-        return repo.findAllDriverNames();
+        return driverRepository.findAllDriverNames();
+    }
+
+    public String getDriverMobileByTripId(Long tripId) {
+        // Step 1: Fetch trip
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new RuntimeException("Trip not found with ID: " + tripId));
+
+        // Step 2: Get driverName from trip
+        String driverName = trip.getDriverName();
+        if (driverName == null || driverName.isBlank()) {
+            throw new RuntimeException("No driver name found in Trip ID: " + tripId);
+        }
+
+        // Step 3: Find driver by name → get mobile
+        Driver driver = driverRepository.findByName(driverName)
+                .orElseThrow(() -> new RuntimeException("Driver not found with name: " + driverName));
+
+        return driver.getMobile();
     }
 }

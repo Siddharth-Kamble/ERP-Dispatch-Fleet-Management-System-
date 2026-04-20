@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface TripRepository extends JpaRepository<Trip, Long> {
 
@@ -88,4 +89,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             @Param("eDate") LocalDate eDate,
             Pageable pageable // 🔥 This allows us to limit to 50
     );
+
+    Optional<Trip> findById(Long id);
 }

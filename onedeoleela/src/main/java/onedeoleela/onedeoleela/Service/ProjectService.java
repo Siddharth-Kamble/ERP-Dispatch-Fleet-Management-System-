@@ -33,10 +33,41 @@
         }
 
         // Update Project
+//        public Project updateProject(Long id, Project project) {
+//            Project existingProject = projectRepository.findById(id)
+//                    .orElseThrow(() -> new RuntimeException("Project not found"));
+//
+//            existingProject.setProjectCode(project.getProjectCode());
+//            existingProject.setProjectName(project.getProjectName());
+//            existingProject.setProjectType(project.getProjectType());
+//            existingProject.setDescription(project.getDescription());
+//            existingProject.setClientName(project.getClientName());
+//            existingProject.setClientContact(project.getClientContact());
+//            existingProject.setClientEmail(project.getClientEmail());
+//            existingProject.setSiteName(project.getSiteName());
+//            existingProject.setSiteAddress(project.getSiteAddress());
+//            existingProject.setCity(project.getCity());
+//            existingProject.setState(project.getState());
+//            existingProject.setCountry(project.getCountry());
+//            existingProject.setStartDate(project.getStartDate());
+//            existingProject.setExpectedEndDate(project.getExpectedEndDate());
+//            existingProject.setActualEndDate(project.getActualEndDate());
+//            existingProject.setProjectStatus(project.getProjectStatus());
+//            existingProject.setEstimatedCost(project.getEstimatedCost());
+//            existingProject.setContractValue(project.getContractValue());
+//            existingProject.setProjectManager(project.getProjectManager());
+//            existingProject.setSiteEngineer(project.getSiteEngineer());
+//            existingProject.setTotalAreaSqFt(project.getTotalAreaSqFt());
+//            existingProject.setNumberOfFloors(project.getNumberOfFloors());
+//
+//            return projectRepository.save(existingProject);
+//        }
+
         public Project updateProject(Long id, Project project) {
             Project existingProject = projectRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Project not found"));
 
+            // ✅ Only update project fields — NEVER touch towers
             existingProject.setProjectCode(project.getProjectCode());
             existingProject.setProjectName(project.getProjectName());
             existingProject.setProjectType(project.getProjectType());
@@ -59,6 +90,9 @@
             existingProject.setSiteEngineer(project.getSiteEngineer());
             existingProject.setTotalAreaSqFt(project.getTotalAreaSqFt());
             existingProject.setNumberOfFloors(project.getNumberOfFloors());
+
+            // ✅ DO NOT set towers — leave existingProject.towers untouched
+            // existingProject.setTowers(project.getTowers()); ← never do this
 
             return projectRepository.save(existingProject);
         }

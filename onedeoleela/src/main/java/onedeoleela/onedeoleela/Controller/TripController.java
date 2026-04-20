@@ -3,6 +3,7 @@ package onedeoleela.onedeoleela.Controller;
 import lombok.RequiredArgsConstructor;
 import onedeoleela.onedeoleela.Entity.Trip;
 import onedeoleela.onedeoleela.Entity.TripStatusEnum;
+import onedeoleela.onedeoleela.Service.DriverService;
 import onedeoleela.onedeoleela.Service.TripService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +19,7 @@ import java.util.List;
 public class TripController {
 
     private final TripService tripService;
-
+    private final DriverService driverService;
     // CREATE TRIP MANUAL
     @PostMapping("/planned")
     public Trip createTrip(@RequestBody Trip trip) {
@@ -100,5 +101,11 @@ public class TripController {
     @GetMapping("/{tripId}")
     public Trip getTripDetails(@PathVariable Long tripId) {
         return tripService.getTripById(tripId);
+    }
+
+    @GetMapping("/{tripId}/driver-mobile")
+    public ResponseEntity<String> getDriverMobile(@PathVariable Long tripId) {
+        String mobile = driverService.getDriverMobileByTripId(tripId);
+        return ResponseEntity.ok(mobile);
     }
 }
