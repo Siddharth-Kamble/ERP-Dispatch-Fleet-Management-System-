@@ -25,4 +25,7 @@ public interface ProjectLogRepository extends JpaRepository<ProjectLog, Long> {
     List<ProjectLog> findByTripId(@Param("tripId") Long tripId);
     @Query("SELECT p FROM ProjectLog p WHERE p.tripId = :tripId")
     Optional<ProjectLog> findFirstByTripId(@Param("tripId") Long tripId);
+
+    Optional<ProjectLog> findTopByTripIdOrderByCreatedAtDesc(Long tripId);
+
 }

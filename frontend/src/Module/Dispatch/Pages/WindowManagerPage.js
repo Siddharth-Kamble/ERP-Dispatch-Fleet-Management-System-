@@ -287,7 +287,7 @@ const downloadPDF = async () => {
   const tripInput    = prompt("Enter Trip ID (optional):")?.trim();
   const extraName    = prompt("Enter Receiver Name (optional):")?.trim() || "";
   const extraContact = prompt("Enter Receiver Contact No (optional):")?.trim() || "";
-
+  const refNo = prompt("Enter Ref No (optional):")?.trim() || "";
   let filteredWindows = windows;
   let tripDateData    = null;
   let driverMobile    = "N/A";
@@ -301,6 +301,7 @@ const downloadPDF = async () => {
     materialDeliveryDate:"N/A",
   };
   let dynamicTowerName = "N/A";
+  let projectAddress = "N/A";
 
   if (tripInput) {
     filteredWindows = windows.filter(
@@ -353,6 +354,25 @@ const downloadPDF = async () => {
       }
     } catch (err) {
       console.error("Error fetching project log:", err);
+    }
+
+    // 2.1 Fetch Project Address using Trip ID
+    try {
+      const addressRes = await axios.get(
+        `${API_URL}/projects/PAddress/${tripInput}`
+      );
+
+      if (addressRes.data) {
+        projectAddress =
+          addressRes.data.projectAddress ||
+          addressRes.data.siteAddress ||
+          addressRes.data ||
+          "N/A";
+      }
+
+      console.log("📍 Project Address:", projectAddress);
+    } catch (err) {
+      console.error("❌ Error fetching project address:", err);
     }
 
     // 3. Tower name — independent, robust string + object handling
@@ -450,6 +470,7 @@ const downloadPDF = async () => {
   const leftRows = [
     { label: "Client Name",    value: dispatchInfo.clientName },
     { label: "Project Name",   value: dispatchInfo.projectName },
+      { label: "Location",       value: projectAddress },
     { label: "Tower Name",     value: towerDisplay },
     { label: "Code No.",       value: dispatchInfo.codeNo },
     { label: "Work Order No.", value: dispatchInfo.workOrderNumber },
@@ -463,6 +484,7 @@ const downloadPDF = async () => {
       ? [{ label: "DC Date",     value: actualDateDisplay }]
       : []),
     { label: "Trip ID",       value: String(tripInput || refTrip.id || "All") },
+     ...(refNo ? [{ label: "Ref No", value: refNo }] : []),
     { label: "Vehicle No",    value: refTrip.vehicleNumber || "N/A" },
     { label: "Driver",        value: refTrip.driverName    || "N/A" },
     { label: "Driver Mo.",    value: driverMobile },
@@ -576,7 +598,7 @@ const downloadPDF = async () => {
     w.glassShutter || 0,
     w.meshShutter || 0,
     w.units || 0,
-    w.sqft || 0,
+   (w.sqft != null ? Number(w.sqft).toFixed(2) : "0.00"),
   ]);
 
   const totalTrack  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.trackOuter)   || 0), 0);
@@ -584,8 +606,10 @@ const downloadPDF = async () => {
   const totalGlass  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.glassShutter) || 0), 0);
   const totalMesh   = filteredWindows.reduce((sum, w) => sum + (parseInt(w.meshShutter)  || 0), 0);
   const totalUnits  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.units)        || 0), 0);
-  const totalSqFt   = filteredWindows.reduce((sum, w) => sum + (parseFloat(w.sqft)       || 0), 0);
-
+const totalSqFt = filteredWindows.reduce((sum, w) => {
+  const val = parseFloat(w.sqft);
+  return sum + (isNaN(val) ? 0 : val);
+}, 0);
   const totalsRow = [
     "", "", "", "", "", "", "", "", "", "", "",
     totalTrack, totalBottom, totalGlass, totalMesh, totalUnits, totalSqFt.toFixed(2),

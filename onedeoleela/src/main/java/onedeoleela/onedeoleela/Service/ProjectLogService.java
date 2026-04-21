@@ -2,9 +2,11 @@
 
 
 
+    import onedeoleela.onedeoleela.Entity.Project;
     import onedeoleela.onedeoleela.Entity.ProjectLog;
     import onedeoleela.onedeoleela.Entity.Window;
     import onedeoleela.onedeoleela.Repository.ProjectLogRepository;
+    import onedeoleela.onedeoleela.Repository.ProjectRepository;
     import onedeoleela.onedeoleela.Repository.WindowRepository;
     import org.springframework.stereotype.Service;
 
@@ -18,9 +20,11 @@
 
         private final ProjectLogRepository projectLogRepository;
         private final WindowRepository windowRepository;
-        public ProjectLogService(ProjectLogRepository projectLogRepository, WindowRepository windowRepository) {
+        private final ProjectRepository projectRepository;
+        public ProjectLogService(ProjectLogRepository projectLogRepository, WindowRepository windowRepository, ProjectRepository projectRepository) {
             this.projectLogRepository = projectLogRepository;
             this.windowRepository = windowRepository;
+            this.projectRepository = projectRepository;
         }
 
         public ProjectLog saveLog(ProjectLog log){
@@ -91,5 +95,26 @@
             result.put("towerName", row[1]);
 
             return result;
+        }
+
+        public Map<String, String> getDetails(Long tripId) {
+
+            ProjectLog log = projectLogRepository
+                    .findTopByTripIdOrderByCreatedAtDesc(tripId)
+                    .orElseThrow(() -> new RuntimeException("ProjectLog not found"));
+
+            String projectName = log.getProjectName();
+
+            Project project = projectRepository
+                    .findByProjectName(projectName)
+                    .orElseThrow(() -> new RuntimeException("Project not found"));
+
+            String projectAddress = project.getSiteAddress();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("projectName", projectName);
+            response.put("projectAddress", projectAddress);
+
+            return response;
         }
     }

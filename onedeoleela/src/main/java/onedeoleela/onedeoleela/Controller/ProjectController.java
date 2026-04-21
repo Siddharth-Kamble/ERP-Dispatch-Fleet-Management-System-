@@ -1,11 +1,13 @@
     package onedeoleela.onedeoleela.Controller;
 
     import onedeoleela.onedeoleela.Entity.Project;
+    import onedeoleela.onedeoleela.Service.ProjectLogService;
     import onedeoleela.onedeoleela.Service.ProjectService;
     import org.springframework.http.ResponseEntity;
     import org.springframework.web.bind.annotation.*;
 
     import java.util.List;
+    import java.util.Map;
     import java.util.Optional;
 
     @RestController
@@ -14,9 +16,11 @@
     public class ProjectController {
 
         private final ProjectService projectService;
+        private final ProjectLogService projectLogService;
 
-        public ProjectController(ProjectService projectService) {
+        public ProjectController(ProjectService projectService, ProjectLogService projectLogService) {
             this.projectService = projectService;
+            this.projectLogService = projectLogService;
         }
 
         // Create Project
@@ -63,5 +67,10 @@
             Optional<Project> project = projectService.getProjectByName(projectName);
             return project.map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
+        }
+
+        @GetMapping("/PAddress/{tripId}")
+        public Map<String, String> getProjectDetails(@PathVariable Long tripId) {
+            return projectLogService.getDetails(tripId);
         }
     }

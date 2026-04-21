@@ -350,11 +350,13 @@ const WindowManager = () => {
     URL.revokeObjectURL(url);
   };
 
+
+
 const downloadPDF = async () => {
   const tripInput    = prompt("Enter Trip ID (optional):")?.trim();
   const extraName    = prompt("Enter Receiver Name (optional):")?.trim() || "";
   const extraContact = prompt("Enter Receiver Contact No (optional):")?.trim() || "";
-
+ const refNo = prompt("Enter Ref No (optional):")?.trim() || "";
   let filteredWindows = windows;
 
   let dispatchInfo = {
@@ -369,6 +371,7 @@ const downloadPDF = async () => {
   let actualDate           = null;
   let materialDeliveryDate = null;
   let driverMobile         = "N/A";
+  let projectAddress = "N/A";
 
   if (tripInput) {
     filteredWindows = windows.filter(
@@ -403,6 +406,30 @@ const downloadPDF = async () => {
           codeNo:          latestLog.codeNo          || "N/A",
         };
 
+ try {
+   const addressRes = await axios.get(
+     `${API_URL}/projects/PAddress/${tripInput}`
+   );
+
+   console.log("📦 Address API FULL Response:", addressRes.data);
+
+   if (addressRes.data) {
+     if (typeof addressRes.data === "string") {
+       projectAddress = addressRes.data.trim();
+     } else if (typeof addressRes.data === "object") {
+       projectAddress =
+         addressRes.data.siteAddress ||
+         addressRes.data.site_address ||
+         addressRes.data.address ||
+         addressRes.data.location ||
+         addressRes.data.projectAddress ||
+         "N/A";
+     }
+   }
+
+ } catch (err) {
+   console.error("❌ Address API failed:", err);
+ }
         // Fetch client name + tower from project
         if (latestLog.projectName) {
           try {
@@ -502,8 +529,25 @@ const downloadPDF = async () => {
     { header: "Height",      mandatory: false, getValue: (w) => (w.height != null && w.height !== 0) ? w.height : null },
     { header: "Qty",         mandatory: false, getValue: (w) => (w.qty    != null && w.qty    !== 0) ? w.qty    : null },
     { header: "Unit",        mandatory: false, getValue: (w) => w.unit },
-    { header: "SqFt",        mandatory: false, getValue: (w) => (w.sqFt   != null && w.sqFt   !== 0) ? w.sqFt   : null },
-    { header: "Weight",      mandatory: false, getValue: (w) => (w.weight != null && w.weight !== 0) ? w.weight : null },
+//    { header: "SqFt",        mandatory: false, getValue: (w) => (w.sqFt   != null && w.sqFt   !== 0) ? w.sqFt   : null },
+//    { header: "Weight",      mandatory: false, getValue: (w) => (w.weight != null && w.weight !== 0) ? w.weight : null },
+    {
+      header: "SqFt",
+      mandatory: false,
+      getValue: (w) => {
+        const val = w.sqFt;
+        return (val != null && val !== 0) ? Number(val).toFixed(2) : null;
+      }
+    },
+    {
+      header: "Weight",
+      mandatory: false,
+      getValue: (w) => {
+        const val = w.weight;
+        return (val != null && val !== 0) ? Number(val).toFixed(2) : null;
+      }
+    },
+
     { header: "R Mtr",       mandatory: false, getValue: (w) => w.rMtr ?? w.rmtr ?? w.rMeter ?? w.r_mtr },
     { header: "Remarks",     mandatory: false, getValue: (w) => w.remarks },
   ];
@@ -533,10 +577,15 @@ const downloadPDF = async () => {
     if (!numericHeaders.has(col.header)) {
       return colIdx === 1 ? "TOTAL" : "";
     }
-    const sum = filteredWindows.reduce((acc, w, i) => {
-      const val = parseFloat(col.getValue(w, i));
-      return acc + (isNaN(val) ? 0 : val);
-    }, 0);
+//    const sum = filteredWindows.reduce((acc, w, i) => {
+//      const val = parseFloat(col.getValue(w, i));
+//      return acc + (isNaN(val) ? 0 : val);
+//    }, 0);
+const sum = filteredWindows.reduce((acc, w, i) => {
+  const rawVal = col.getValue(w, i);
+  const val = parseFloat(rawVal);
+  return acc + (isNaN(val) ? 0 : val);
+}, 0);
     return col.header === "Qty"
       ? String(Math.round(sum))
       : sum.toFixed(2);
@@ -595,6 +644,7 @@ const downloadPDF = async () => {
   const leftRows = [
     { label: "Client Name",    value: dispatchInfo.clientName },
     { label: "Project Name",   value: dispatchInfo.projectName },
+    { label: "Location", value: projectAddress },
     { label: "Tower Name",     value: towerDisplay },
     { label: "DC No",          value: dispatchInfo.dcNo },
     { label: "Work Order No.", value: dispatchInfo.workOrderNumber },
@@ -610,8 +660,9 @@ const downloadPDF = async () => {
     : formatDateDMY(new Date());
 
   const rightRows = [
+   { label: "Date",       value: actualDateFormatted },
     { label: "Trip ID",    value: String(tripInput || refTrip.id || "All") },
-    { label: "Date",       value: actualDateFormatted },
+       ...(refNo ? [{ label: "Ref No", value: refNo }] : []),
     { label: "Vehicle No", value: refTrip.vehicleNumber || "N/A" },
     { label: "Driver",     value: refTrip.driverName    || "N/A" },
     { label: "Driver Mo.", value: driverMobile },
