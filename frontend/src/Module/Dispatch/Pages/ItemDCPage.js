@@ -609,7 +609,7 @@ const sum = filteredWindows.reduce((acc, w, i) => {
       : towers.find((t) => t.towerId == selectedTower)?.towerName || "N/A";
 
   const cloudinaryLogoUrl =
-    "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+    "https://res.cloudinary.com/dhmcijhts/image/upload/v1776749595/yl6t3sexqn72xh3oqksg.png";
 
   // ═══════════════════════════════════════════════════════════════
   // LAYOUT CONSTANTS

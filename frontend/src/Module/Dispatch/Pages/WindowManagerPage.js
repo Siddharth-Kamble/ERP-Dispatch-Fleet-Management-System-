@@ -281,8 +281,6 @@ const formatDate = (dateStr) => {
   return new Date(dateStr).toLocaleDateString("en-IN");
 };
 
-
-
 const downloadPDF = async () => {
   const tripInput    = prompt("Enter Trip ID (optional):")?.trim();
   const extraName    = prompt("Enter Receiver Name (optional):")?.trim() || "";
@@ -415,6 +413,29 @@ const downloadPDF = async () => {
   console.log("📄 driverMobile:", driverMobile);
   console.log("📄 dispatchInfo:", dispatchInfo);
 
+  // ── Sort filteredWindows by windowSeriesNumber ASCENDING ──────
+// ── Sort filteredWindows by windowSeriesNumber ASCENDING (nulls at bottom) ──
+filteredWindows = [...filteredWindows].sort((a, b) => {
+  const aRaw = a.windowSeriesNumber;
+  const bRaw = b.windowSeriesNumber;
+
+  const aEmpty = aRaw === null || aRaw === undefined || String(aRaw).trim() === "";
+  const bEmpty = bRaw === null || bRaw === undefined || String(bRaw).trim() === "";
+
+  // Both empty → keep original order
+  if (aEmpty && bEmpty) return 0;
+  // a empty → push a to bottom
+  if (aEmpty) return 1;
+  // b empty → push b to bottom
+  if (bEmpty) return -1;
+
+  // Both have values — numeric sort first, string fallback
+  const aVal = parseInt(aRaw, 10);
+  const bVal = parseInt(bRaw, 10);
+  if (!isNaN(aVal) && !isNaN(bVal)) return aVal - bVal;
+  return String(aRaw).localeCompare(String(bRaw));
+});
+
   const doc       = new jsPDF("portrait");
   const refWindow = filteredWindows[0];
   const refTrip   = refWindow?.trip || {};
@@ -427,7 +448,7 @@ const downloadPDF = async () => {
   console.log("📄 towerDisplay:", towerDisplay);
 
   const cloudinaryLogoUrl =
-    "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+    "https://res.cloudinary.com/dhmcijhts/image/upload/v1776749595/yl6t3sexqn72xh3oqksg.png";
 
   // ═══════════════════════════════════════════════════════════
   // LAYOUT CONSTANTS  (portrait page = 210 × 297 mm)
@@ -446,8 +467,6 @@ const downloadPDF = async () => {
   const maxTextWidthRight = 45;
 
   const rowGap     = 7;
-  // Address block: company name at y=14, then 8 lines × 4.2 = 33.6 → last line at ~47.8
-  // dividerY sits just below that with a small gap
   const dividerY   = 53;           // horizontal line separating address from info rows
   const infoStartY = 60;           // first info row (Client Name) — 7 mm below dividerY
 
@@ -470,7 +489,7 @@ const downloadPDF = async () => {
   const leftRows = [
     { label: "Client Name",    value: dispatchInfo.clientName },
     { label: "Project Name",   value: dispatchInfo.projectName },
-      { label: "Location",       value: projectAddress },
+    { label: "Location",       value: projectAddress },
     { label: "Tower Name",     value: towerDisplay },
     { label: "Code No.",       value: dispatchInfo.codeNo },
     { label: "Work Order No.", value: dispatchInfo.workOrderNumber },
@@ -484,7 +503,7 @@ const downloadPDF = async () => {
       ? [{ label: "DC Date",     value: actualDateDisplay }]
       : []),
     { label: "Trip ID",       value: String(tripInput || refTrip.id || "All") },
-     ...(refNo ? [{ label: "Ref No", value: refNo }] : []),
+    ...(refNo ? [{ label: "Ref No", value: refNo }] : []),
     { label: "Vehicle No",    value: refTrip.vehicleNumber || "N/A" },
     { label: "Driver",        value: refTrip.driverName    || "N/A" },
     { label: "Driver Mo.",    value: driverMobile },
@@ -598,7 +617,7 @@ const downloadPDF = async () => {
     w.glassShutter || 0,
     w.meshShutter || 0,
     w.units || 0,
-   (w.sqft != null ? Number(w.sqft).toFixed(2) : "0.00"),
+    (w.sqft != null ? Number(w.sqft).toFixed(2) : "0.00"),
   ]);
 
   const totalTrack  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.trackOuter)   || 0), 0);
@@ -606,10 +625,11 @@ const downloadPDF = async () => {
   const totalGlass  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.glassShutter) || 0), 0);
   const totalMesh   = filteredWindows.reduce((sum, w) => sum + (parseInt(w.meshShutter)  || 0), 0);
   const totalUnits  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.units)        || 0), 0);
-const totalSqFt = filteredWindows.reduce((sum, w) => {
-  const val = parseFloat(w.sqft);
-  return sum + (isNaN(val) ? 0 : val);
-}, 0);
+  const totalSqFt   = filteredWindows.reduce((sum, w) => {
+    const val = parseFloat(w.sqft);
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
   const totalsRow = [
     "", "", "", "", "", "", "", "", "", "", "",
     totalTrack, totalBottom, totalGlass, totalMesh, totalUnits, totalSqFt.toFixed(2),
@@ -668,6 +688,8 @@ const totalSqFt = filteredWindows.reduce((sum, w) => {
 
   doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
 };
+
+
 
   const filteredWindowsByCriteria = windows.filter((w) => {
     if (tripIdFilter && (w?.trip?.id ?? w?.tripId)?.toString() !== tripIdFilter) return false;

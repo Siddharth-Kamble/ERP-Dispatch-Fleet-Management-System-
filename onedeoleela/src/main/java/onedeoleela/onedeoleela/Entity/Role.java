@@ -9,5 +9,9 @@ public enum Role {
     DRIVER,
     SITE_SUPERVISOR,
     PURCHASE,
-    POWDER_COATING
+    POWDER_COATING,
+    PLANNING,
+    BOSS,
+    PA
+
 }

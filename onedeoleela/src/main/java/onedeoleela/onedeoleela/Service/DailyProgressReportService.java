@@ -34,7 +34,7 @@ public class DailyProgressReportService {
 
     /** Cloudinary URL for the company logo shown in the top-left corner. */
     private static final String LOGO_URL =
-            "https://res.cloudinary.com/dhmcijhts/image/upload/v1774439813/updytp3rs57vhqtdbx1p.png";
+            "https://res.cloudinary.com/dhmcijhts/image/upload/v1776749595/yl6t3sexqn72xh3oqksg.png";
 
     // ─────────────────────────────────────────────────────────────────────────
     // CRUD
