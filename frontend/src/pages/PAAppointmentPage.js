@@ -166,7 +166,7 @@ const filteredList = React.useMemo(() => {
 
             return mf && ms && a.status !== "AVAILABLE";
         })
-        .sort((a, b) => new Date(b.startTime) - new Date(a.startTime)); // ✅ DESCENDING
+  .sort((a, b) => Number(b.id) - Number(a.id))
 }, [appointments, filter, search]);
     const stats = {
         total:    appointments.filter(a => a.status !== "AVAILABLE").length,

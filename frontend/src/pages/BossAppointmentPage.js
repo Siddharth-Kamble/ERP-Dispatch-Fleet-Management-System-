@@ -10,7 +10,6 @@ import {
 } from "react-icons/fa";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
 const API_URL = "http://localhost:8080/api/appointments";
 
 const PRIORITY_CONFIG = {
@@ -50,9 +49,8 @@ function BossAppointmentPage() {
             const data = await res.json();
 const safe = Array.isArray(data) ? data : [];
 
-// ✅ Sort in DESCENDING order (latest first)
 safe.sort((a, b) => {
-    return new Date(b.startTime || 0) - new Date(a.startTime || 0);
+    return Number(b.id || 0) - Number(a.id || 0);
 });            const prev = prevRef.current;
             const newNotifs = [];
             safe.forEach(apt => {
@@ -653,7 +651,22 @@ const s = {
     approveBtn:  { display:"flex", alignItems:"center", gap:"6px", background:"#dcfce7", color:"#15803d", border:"1px solid #86efac", padding:"8px 14px", borderRadius:"8px", fontWeight:700, fontSize:"12px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" },
     rejectBtn:   { display:"flex", alignItems:"center", gap:"6px", background:"#fee2e2", color:"#dc2626", border:"1px solid #fca5a5", padding:"8px 14px", borderRadius:"8px", fontWeight:700, fontSize:"12px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" },
     reschedBtn:  { display:"flex", alignItems:"center", gap:"6px", background:"#e0f2fe", color:"#0369a1", border:"1px solid #7dd3fc", padding:"8px 14px", borderRadius:"8px", fontWeight:700, fontSize:"12px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif" },
-    editStatusBtn:{ display:"flex", alignItems:"center", gap:"6px", background:"#0a1128", color:"#38bdf8", border:"1px solid #38bdf8", padding:"7px 14px", borderRadius:"8px", fontWeight:700, fontSize:"11px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", marginTop:"8px" },
+   // editStatusBtn:{ display:"flex", alignItems:"center", gap:"6px", background:"#0a1128", color:"#38bdf8", border:"1px solid #38bdf8", padding:"7px 14px", borderRadius:"8px", fontWeight:700, fontSize:"11px", cursor:"pointer", fontFamily:"'DM Sans',sans-serif", marginTop:"8px" },
+    editStatusBtn: {
+        display:"flex",
+        alignItems:"center",
+        gap:"6px",
+        background:"#f1f5f9",   // ✅ changed from black to light gray
+        color:"#0a1128",       // or keep "#38bdf8" if you want blue text
+        border:"1px solid #cbd5e1",
+        padding:"7px 14px",
+        borderRadius:"8px",
+        fontWeight:700,
+        fontSize:"11px",
+        cursor:"pointer",
+        fontFamily:"'DM Sans',sans-serif",
+        marginTop:"8px"
+    },
     upcomingGrid:{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:"14px" },
     upcomingCard:{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:"12px", padding:"16px" },
     filterBtn:   { background:"#f8fafc", border:"1px solid #e2e8f0", color:"#64748b", padding:"5px 12px", borderRadius:"8px", fontSize:"10px", fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" },

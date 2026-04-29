@@ -83,11 +83,11 @@ public class Item {
 
     // ── Col J (9) ──
     @Column(name = "width")
-    private Double width;
+    private String width;
 
     // ── Col K (10) ──
     @Column(name = "height")
-    private Double height;
+    private String height;
 
     // ── Col L (11) ──
     @Column(name = "qty")

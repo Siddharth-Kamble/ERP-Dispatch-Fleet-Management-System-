@@ -14,6 +14,8 @@
     import java.time.format.DateTimeFormatter;
     import java.util.*;
 
+
+
     /**
      * ═══════════════════════════════════════════════════════════════════════
      *  EXCEL COLUMN MAPPING  (Row 0 = header, data starts from Row 1)
@@ -128,17 +130,7 @@
             itemRepository.deleteById(id);
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        //  MATERIAL DELIVERY DATE
-        //  Returns the formatted "Material Delivery Date" string for the PDF
-        //  header, or null if no special date should be shown.
-        //
-        //  Rule:
-        //    If projectLog exists for the trip AND userDate is not null
-        //    AND userDate differs from createdAt.toLocalDate()
-        //    → return userDate formatted as dd/MM/yyyy
-        //  Otherwise → return null (frontend omits the line)
-        // ═══════════════════════════════════════════════════════════════════
+
         public String getMaterialDeliveryDate(Long tripId) {
             return projectLogRepository
                     .findFirstByTripIdOrderByCreatedAtDesc(tripId)
@@ -153,15 +145,7 @@
                     .orElse(null);
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        //  PDF COLUMN PRESENCE
-        //  Returns a Map of column-name → true/false indicating whether that
-        //  column has at least one non-null, non-blank value across all items
-        //  for the given trip. The frontend uses this to drop empty columns
-        //  from the generated PDF.
-        //
-        //  Column names match the PDF header labels exactly.
-        // ═══════════════════════════════════════════════════════════════════
+
         public Map<String, Boolean> getColumnPresence(Long tripId) {
             List<Item> items = itemRepository.findByTrip_Id(tripId);
 
@@ -193,8 +177,15 @@
             presence.put("Job Card No",  items.stream().anyMatch(i -> notBlank(i.getJobCardNo())));
             presence.put("Priority",     items.stream().anyMatch(i -> notBlank(i.getPriority())));
             presence.put("Description",  items.stream().anyMatch(i -> notBlank(i.getDescription())));
-            presence.put("Width",        items.stream().anyMatch(i -> i.getWidth()       != null && i.getWidth()  != 0));
-            presence.put("Height",       items.stream().anyMatch(i -> i.getHeight()      != null && i.getHeight() != 0));
+//            presence.put("Width",        items.stream().anyMatch(i -> i.getWidth()       != null && i.getWidth()  != 0));
+//            presence.put("Height",       items.stream().anyMatch(i -> i.getHeight()      != null && i.getHeight() != 0));
+            presence.put("Width",
+                    items.stream().anyMatch(i -> i.getWidth() != null && !i.getWidth().isBlank())
+            );
+
+            presence.put("Height",
+                    items.stream().anyMatch(i -> i.getHeight() != null && !i.getHeight().isBlank())
+            );
             presence.put("Qty",          items.stream().anyMatch(i -> i.getQty()         != null && i.getQty()    != 0));
             presence.put("Unit",         items.stream().anyMatch(i -> notBlank(i.getUnit())));
             presence.put("SqFt",         items.stream().anyMatch(i -> i.getSqFt()        != null && i.getSqFt()   != 0));
@@ -265,8 +256,8 @@
                 item.setJobCardNo(getCellStringValue(row, COL_JOB_CARD));
                 item.setPriority(getCellStringValue(row, COL_PRIORITY));         // ← NEW
                 item.setDescription(getCellStringValue(row, COL_DESCRIPTION));
-                item.setWidth(getCellDoubleValue(row, COL_WIDTH));
-                item.setHeight(getCellDoubleValue(row, COL_HEIGHT));
+                item.setWidth(getCellStringValue(row, COL_WIDTH));
+                item.setHeight(getCellStringValue(row, COL_HEIGHT));
                 item.setQty(getCellIntValue(row, COL_QTY));
                 item.setUnit(getCellStringValue(row, COL_UNIT));
                 item.setSqFt(getCellDoubleValue(row, COL_SQFT));
@@ -303,9 +294,10 @@
             Floor floor = getOrCreateFloor(floorNumber, towerId);
             Flat  flat  = getOrCreateFlat(item.getFlatNo(), floor);
 
-            Double  width  = item.getWidth()  != null ? item.getWidth()  : 0;
-            Double  height = item.getHeight() != null ? item.getHeight() : 0;
-            Integer qty    = item.getQty()    != null ? item.getQty()    : 0;
+
+            Double width  = parseDouble(item.getWidth());
+            Double height = parseDouble(item.getHeight());
+            Integer qty   = item.getQty() != null ? item.getQty() : 0;
 
             Double calculated = ((width * height * qty) / 1_000_000) * 10.764;
             item.setSqFt(calculated);
@@ -379,7 +371,8 @@
             if (cell == null) return "";
             return switch (cell.getCellType()) {
                 case STRING  -> cell.getStringCellValue().trim();
-                case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
+              //  case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
+                case NUMERIC -> String.valueOf(cell.getNumericCellValue());
                 case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
                 case FORMULA -> {
                     try { yield String.valueOf((long) cell.getNumericCellValue()); }
@@ -395,7 +388,7 @@
             return switch (cell.getCellType()) {
                 case NUMERIC -> cell.getNumericCellValue();
                 case STRING  -> {
-                    try { yield Double.parseDouble(cell.getStringCellValue().trim()); }
+                    try { yield parseDouble(cell.getStringCellValue().trim()); }
                     catch (NumberFormatException e) { yield null; }
                 }
                 default -> null;
@@ -443,5 +436,14 @@
             try {
                 return Integer.parseInt(flatNumber.replaceAll("[^0-9]", "").substring(0, 1));
             } catch (Exception e) { return 0; }
+        }
+
+        private Double parseDouble(String value) {
+            try {
+                if (value == null || value.isBlank()) return 0.0;
+                return Double.parseDouble(value);
+            } catch (Exception e) {
+                return 0.0;
+            }
         }
     }
