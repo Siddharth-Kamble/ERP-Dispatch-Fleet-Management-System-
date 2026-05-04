@@ -97,9 +97,7 @@ public class PlanningController {
         return ResponseEntity.ok(lineItemService.updateLineItem(id, body));
     }
 
-    /**
-     * DELETE /api/planning/line-items/{id}
-     */
+
     @DeleteMapping("/line-items/{id}")
     public ResponseEntity<Map<String, String>> deleteLineItem(@PathVariable Long id) {
         lineItemService.deleteLineItem(id);
@@ -139,10 +137,7 @@ public class PlanningController {
     // HISTORY
     // ══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * GET /api/planning/works/{workId}/history
-     * All change history for a specific work, newest first.
-     */
+
     @GetMapping("/works/{workId}/history")
     public ResponseEntity<List<PlanningHistory>> getWorkHistory(@PathVariable Long workId) {
         return ResponseEntity.ok(historyService.getHistoryByWork(workId));

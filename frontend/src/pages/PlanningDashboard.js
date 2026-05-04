@@ -96,48 +96,207 @@ const NAV = [
   { key: "notifications", icon: FaBell,       label: "Notifications",  color: "#f97316" },
 ];
 
-// ─── Download history (enhanced with project + work name header) ──────────────
+
+// ─── Download history (Revision Table Format) ────────────────────────────────
 function downloadHistory(history, title = "Change History", projectName = "", workName = "") {
   if (!history || history.length === 0) { alert("No history to download."); return; }
-  const lines = [
-    "=".repeat(70),
-    `  CHANGE HISTORY REPORT`,
-    `  Project  : ${projectName || "—"}`,
-    `  Work     : ${workName || "—"}`,
-    `  Downloaded: ${fmtDateTime(new Date().toISOString())}`,
-    `  Total Changes: ${history.length}`,
-    "=".repeat(70), "",
-  ];
-  history.forEach((h, i) => {
-    lines.push(`[${i + 1}] ${h.lineItemName || "Unknown Item"}`);
-    lines.push(`    What changed : ${FIELD_LABELS[h.field] || h.field}`);
-    lines.push(`    From         : ${h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}`);
-    lines.push(`    To           : ${h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}`);
-    if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-      const diff = daysBetween(h.oldValue, h.newValue);
-      if (diff !== 0)
-        lines.push(`    Delay        : ${diff > 0 ? `+${diff}` : diff} days ${diff > 0 ? "(delayed)" : "(moved earlier)"}`);
+
+  const lines = [];
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  lines.push("=".repeat(90));
+  lines.push(`  CHANGE HISTORY REPORT`);
+  lines.push(`  Project      : ${projectName || "—"}`);
+  lines.push(`  Work         : ${workName || "—"}`);
+  lines.push(`  Downloaded   : ${fmtDateTime(new Date().toISOString())}`);
+  lines.push(`  Total Changes: ${history.length}`);
+  lines.push("=".repeat(90));
+  lines.push("");
+
+  // ── Group history by lineItemName ───────────────────────────────────────────
+  const grouped = {};
+  history.forEach((h) => {
+    const key = h.lineItemName || "Unknown Item";
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(h);
+  });
+
+  const COL_W = 22; // width of each revision column
+  const LABEL_W = 16; // width of the field label column
+
+  const pad = (str, len) => {
+    const s = String(str ?? "—");
+    return s.length >= len ? s.substring(0, len - 1) + " " : s + " ".repeat(len - s.length);
+  };
+
+  const divider = (char = "-") =>
+    pad("", LABEL_W) + "+".padEnd(1) + Array.from({ length: Object.keys(grouped).length > 0 ? 1 : 1 }, () => char.repeat(COL_W)).join("+");
+
+  // ── Per Line Item block ─────────────────────────────────────────────────────
+  Object.entries(grouped).forEach(([itemName, revisions]) => {
+    // Line item title
+    lines.push(`LINE ITEM: ${itemName}`);
+    lines.push("─".repeat(90));
+
+    // ── Column headers: REV 1, REV 2 ... ──────────────────────────────────────
+    const revCount = revisions.length;
+    const headerRow1 = pad("FIELD", LABEL_W) + "| " +
+      revisions.map((h, i) => {
+        const label = `REV ${i + 1}`;
+        return pad(label, COL_W);
+      }).join("| ");
+
+    // Delay badge per revision (e.g. +5D / -2D)
+    const headerRow2 = pad("", LABEL_W) + "| " +
+      revisions.map((h) => {
+        if (h.field?.includes("Date") && h.oldValue && h.newValue) {
+          const diff = daysBetween(h.oldValue, h.newValue);
+          if (diff !== 0) {
+            const badge = diff > 0 ? `+${diff}D` : `${diff}D`;
+            return pad(badge, COL_W);
+          }
+        }
+        return pad("", COL_W);
+      }).join("| ");
+
+    const separator = pad("", LABEL_W) + "+-" + revisions.map(() => "-".repeat(COL_W)).join("+-");
+
+    lines.push(headerRow1);
+    lines.push(headerRow2);
+    lines.push(separator);
+
+    // ── Rows ──────────────────────────────────────────────────────────────────
+
+    // WHAT CHANGED
+    lines.push(
+      pad("WHAT CHANGED", LABEL_W) + "| " +
+      revisions.map((h) => pad(FIELD_LABELS[h.field] || h.field || "—", COL_W)).join("| ")
+    );
+    lines.push(separator);
+
+    // FROM
+    lines.push(
+      pad("FROM", LABEL_W) + "| " +
+      revisions.map((h) => {
+        const val = h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—");
+        return pad(val, COL_W);
+      }).join("| ")
+    );
+    lines.push(separator);
+
+    // TO
+    lines.push(
+      pad("TO", LABEL_W) + "| " +
+      revisions.map((h) => {
+        const val = h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—");
+        return pad(val, COL_W);
+      }).join("| ")
+    );
+    lines.push(separator);
+
+    // SHIFT (delay in days)
+    lines.push(
+      pad("SHIFT", LABEL_W) + "| " +
+      revisions.map((h) => {
+        if (h.field?.includes("Date") && h.oldValue && h.newValue) {
+          const diff = daysBetween(h.oldValue, h.newValue);
+          if (diff !== 0) return pad(`${diff > 0 ? `+${diff}d` : `${diff}d`}`, COL_W);
+        }
+        return pad("—", COL_W);
+      }).join("| ")
+    );
+    lines.push(separator);
+
+    // REASON
+    lines.push(
+      pad("REASON", LABEL_W) + "| " +
+      revisions.map((h) => pad(h.reason || "No reason provided", COL_W)).join("| ")
+    );
+    lines.push(separator);
+
+    // CHANGED BY
+    lines.push(
+      pad("CHANGED BY", LABEL_W) + "| " +
+      revisions.map((h) => pad(h.changedBy || "System", COL_W)).join("| ")
+    );
+    lines.push(separator);
+
+    // CHANGED AT
+    lines.push(
+      pad("CHANGED AT", LABEL_W) + "| " +
+      revisions.map((h) => pad(fmtDateTime(h.changedAt), COL_W)).join("| ")
+    );
+    lines.push(separator);
+
+    // ALSO AFFECTED
+    const hasAffected = revisions.some((h) => h.cascadedItemNames);
+    if (hasAffected) {
+      lines.push(
+        pad("ALSO AFFECTED", LABEL_W) + "| " +
+        revisions.map((h) => pad(h.cascadedItemNames || "—", COL_W)).join("| ")
+      );
+      lines.push(separator);
     }
-    lines.push(`    Reason       : ${h.reason || "No reason provided"}`);
-    lines.push(`    Changed By   : ${h.changedBy || "System"}`);
-    lines.push(`    Changed At   : ${fmtDateTime(h.changedAt)}`);
-    if (h.cascadedItemNames) lines.push(`    Also affected: ${h.cascadedItemNames}`);
+
     lines.push("");
   });
-  lines.push("=".repeat(70));
-  lines.push("End of Report");
+
+  // ── Footer ──────────────────────────────────────────────────────────────────
+  lines.push("=".repeat(90));
+  lines.push("  End of Report");
+  lines.push("=".repeat(90));
+
+  // ── Filename: ProjectName_WorkName_history.txt ───────────────────────────────
+  const safeName = (s) => (s || "unknown").replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_");
+  const filename = `${safeName(projectName)}_${safeName(workName)}_history.txt`;
+
   const blob = new Blob([lines.join("\n")], { type: "text/plain" });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
-  a.href = url; a.download = `history-${Date.now()}.txt`; a.click();
+  a.href = url;
+  a.download = filename;
+  a.click();
   URL.revokeObjectURL(url);
 }
-
-// ─── Download Revisions in horizontal table format ─────────────────────────
+// ─── Download history (enhanced with project + work name header) ──────────────
+//function downloadHistory(history, title = "Change History", projectName = "", workName = "") {
+//  if (!history || history.length === 0) { alert("No history to download."); return; }
+//  const lines = [
+//    "=".repeat(70),
+//    `  CHANGE HISTORY REPORT`,
+//    `  Project  : ${projectName || "—"}`,
+//    `  Work     : ${workName || "—"}`,
+//    `  Downloaded: ${fmtDateTime(new Date().toISOString())}`,
+//    `  Total Changes: ${history.length}`,
+//    "=".repeat(70), "",
+//  ];
+//  history.forEach((h, i) => {
+//    lines.push(`[${i + 1}] ${h.lineItemName || "Unknown Item"}`);
+//    lines.push(`    What changed : ${FIELD_LABELS[h.field] || h.field}`);
+//    lines.push(`    From         : ${h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}`);
+//    lines.push(`    To           : ${h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}`);
+//    if (h.field?.includes("Date") && h.oldValue && h.newValue) {
+//      const diff = daysBetween(h.oldValue, h.newValue);
+//      if (diff !== 0)
+//        lines.push(`    Delay        : ${diff > 0 ? `+${diff}` : diff} days ${diff > 0 ? "(delayed)" : "(moved earlier)"}`);
+//    }
+//    lines.push(`    Reason       : ${h.reason || "No reason provided"}`);
+//    lines.push(`    Changed By   : ${h.changedBy || "System"}`);
+//    lines.push(`    Changed At   : ${fmtDateTime(h.changedAt)}`);
+//    if (h.cascadedItemNames) lines.push(`    Also affected: ${h.cascadedItemNames}`);
+//    lines.push("");
+//  });
+//  lines.push("=".repeat(70));
+//  lines.push("End of Report");
+//  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+//  const url  = URL.createObjectURL(blob);
+//  const a    = document.createElement("a");
+//  a.href = url; a.download = `history-${Date.now()}.txt`; a.click();
+//  URL.revokeObjectURL(url);
+//}
 function downloadRevisions(history, projectName, workName) {
   if (!history || history.length === 0) { alert("No revisions to download."); return; }
 
-  // Group by lineItemId
   const byItem = {};
   history.forEach(h => {
     const key = h.lineItemId || h.lineItemName;
@@ -145,42 +304,155 @@ function downloadRevisions(history, projectName, workName) {
     byItem[key].changes.push(h);
   });
 
+  const LABEL_W = 15;
+  const COL_W   = 20;
+
+  const cell = (str, w) => {
+    const s = String(str ?? "—");
+    return s.length >= w ? s.substring(0, w - 1) + " " : s + " ".repeat(w - s.length);
+  };
+
+  const row = (label, cols) =>
+    `${cell(label, LABEL_W)}| ${cols.map(c => cell(c, COL_W)).join("| ")}`;
+
+  const sep = (revCount) =>
+    `${cell("", LABEL_W)}+-${Array(revCount).fill("-".repeat(COL_W)).join("+-")}`;
+
   const lines = [
     "=".repeat(90),
-    `  REVISION HISTORY — HORIZONTAL VIEW`,
-    `  Project : ${projectName || "—"}`,
-    `  Work    : ${workName || "—"}`,
-    `  Downloaded: ${fmtDateTime(new Date().toISOString())}`,
-    "=".repeat(90), "",
+    `  REVISION HISTORY REPORT`,
+    `  Project    : ${projectName || "—"}`,
+    `  Work       : ${workName    || "—"}`,
+    `  Downloaded : ${fmtDateTime(new Date().toISOString())}`,
+    "=".repeat(90),
+    "",
   ];
 
   Object.values(byItem).forEach(({ name, changes }) => {
+    const revCount = changes.length;
+
     lines.push(`LINE ITEM: ${name}`);
-    lines.push("-".repeat(80));
-    changes.forEach((h, i) => {
-      lines.push(`  Rev ${i + 1}:`);
-      lines.push(`    Field    : ${FIELD_LABELS[h.field] || h.field}`);
-      lines.push(`    From     : ${h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}`);
-      lines.push(`    To       : ${h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}`);
+    lines.push("─".repeat(90));
+    lines.push(row("FIELD", changes.map((_, i) => `REV ${i + 1}`)));
+    lines.push(row("", changes.map(h => {
       if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-        const diff = daysBetween(h.oldValue, h.newValue);
-        if (diff !== 0)
-          lines.push(`    Shift    : ${diff > 0 ? `+${diff}` : diff} days ${diff > 0 ? "(delayed)" : "(earlier)"}`);
+        const d = daysBetween(h.oldValue, h.newValue);
+        if (d !== 0) return d > 0 ? `+${d}D` : `${d}D`;
       }
-      lines.push(`    Reason   : ${h.reason || "—"}`);
-      lines.push(`    Changed  : ${fmtDateTime(h.changedAt)} by ${h.changedBy || "System"}`);
-      if (h.cascadedItemNames) lines.push(`    Affected : ${h.cascadedItemNames}`);
-    });
+      return "";
+    })));
+    lines.push(sep(revCount));
+    lines.push(row("WHAT CHANGED", changes.map(h => FIELD_LABELS[h.field] || h.field || "—")));
+    lines.push(sep(revCount));
+    lines.push(row("FROM", changes.map(h =>
+      h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")
+    )));
+    lines.push(sep(revCount));
+    lines.push(row("TO", changes.map(h =>
+      h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")
+    )));
+    lines.push(sep(revCount));
+    lines.push(row("SHIFT", changes.map(h => {
+      if (h.field?.includes("Date") && h.oldValue && h.newValue) {
+        const d = daysBetween(h.oldValue, h.newValue);
+        if (d !== 0) return d > 0 ? `+${d}d` : `${d}d`;
+      }
+      return "—";
+    })));
+    lines.push(sep(revCount));
+    lines.push(row("REASON", changes.map(h => h.reason || "—")));
+    lines.push(sep(revCount));
+    lines.push(row("CHANGED BY", changes.map(h => h.changedBy || "System")));
+    lines.push(sep(revCount));
+    lines.push(row("CHANGED AT", changes.map(h => fmtDateTime(h.changedAt))));
+    lines.push(sep(revCount));
+
+    // ── ALSO AFFECTED (multi-line, full names) ────────────────────────────────
+    if (changes.some(h => h.cascadedItemNames)) {
+      const affectedCols = changes.map(h => {
+        if (!h.cascadedItemNames) return ["—"];
+        const names = Array.isArray(h.cascadedItemNames)
+          ? h.cascadedItemNames
+          : h.cascadedItemNames.split(",").map(s => s.trim());
+        return names;
+      });
+      const maxRows = Math.max(...affectedCols.map(a => a.length));
+      for (let r = 0; r < maxRows; r++) {
+        lines.push(row(
+          r === 0 ? "ALSO AFFECTED" : "",
+          affectedCols.map(names => names[r] || "")
+        ));
+      }
+      lines.push(sep(revCount));
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     lines.push("");
   });
+
   lines.push("=".repeat(90));
-  lines.push("End of Report");
+  lines.push("  End of Report");
+  lines.push("=".repeat(90));
+
+  const safe = s => (s || "unknown").replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/_+/g, "_").trim();
+  const filename = `${safe(projectName)}_${safe(workName)}_revisions.txt`;
+
   const blob = new Blob([lines.join("\n")], { type: "text/plain" });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
-  a.href = url; a.download = `revisions-${Date.now()}.txt`; a.click();
+  a.href     = url;
+  a.download = filename;
+  a.click();
   URL.revokeObjectURL(url);
 }
+// ─── Download Revisions in horizontal table format ─────────────────────────
+//function downloadRevisions(history, projectName, workName) {
+//  if (!history || history.length === 0) { alert("No revisions to download."); return; }
+//
+//  // Group by lineItemId
+//  const byItem = {};
+//  history.forEach(h => {
+//    const key = h.lineItemId || h.lineItemName;
+//    if (!byItem[key]) byItem[key] = { name: h.lineItemName, changes: [] };
+//    byItem[key].changes.push(h);
+//  });
+//
+//  const lines = [
+//    "=".repeat(90),
+//    `  REVISION HISTORY — HORIZONTAL VIEW`,
+//    `  Project : ${projectName || "—"}`,
+//    `  Work    : ${workName || "—"}`,
+//    `  Downloaded: ${fmtDateTime(new Date().toISOString())}`,
+//    "=".repeat(90), "",
+//  ];
+//
+//  Object.values(byItem).forEach(({ name, changes }) => {
+//    lines.push(`LINE ITEM: ${name}`);
+//    lines.push("-".repeat(80));
+//    changes.forEach((h, i) => {
+//      lines.push(`  Rev ${i + 1}:`);
+//      lines.push(`    Field    : ${FIELD_LABELS[h.field] || h.field}`);
+//      lines.push(`    From     : ${h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}`);
+//      lines.push(`    To       : ${h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}`);
+//      if (h.field?.includes("Date") && h.oldValue && h.newValue) {
+//        const diff = daysBetween(h.oldValue, h.newValue);
+//        if (diff !== 0)
+//          lines.push(`    Shift    : ${diff > 0 ? `+${diff}` : diff} days ${diff > 0 ? "(delayed)" : "(earlier)"}`);
+//      }
+//      lines.push(`    Reason   : ${h.reason || "—"}`);
+//      lines.push(`    Changed  : ${fmtDateTime(h.changedAt)} by ${h.changedBy || "System"}`);
+//      if (h.cascadedItemNames) lines.push(`    Affected : ${h.cascadedItemNames}`);
+//    });
+//    lines.push("");
+//  });
+//  lines.push("=".repeat(90));
+//  lines.push("End of Report");
+//  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+//  const url  = URL.createObjectURL(blob);
+//  const a    = document.createElement("a");
+//  a.href = url; a.download = `revisions-${Date.now()}.txt`; a.click();
+//  URL.revokeObjectURL(url);
+//}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NOTIFICATION HELPERS
@@ -1519,6 +1791,7 @@ function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, 
   const fieldLabel = field === "startDate" ? "Start Date" : "End Date";
 
   // Auto end date preview when shifting start
+
   const duration       = daysBetween(item.startDate, item.endDate);
   const autoNewEndDate = field === "startDate" && validDays && item.endDate
     ? addDaysToDate(addDaysToDate(oldDate, days), duration)

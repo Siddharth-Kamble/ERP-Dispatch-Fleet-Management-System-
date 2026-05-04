@@ -413,29 +413,136 @@ const downloadPDF = async () => {
   console.log("📄 driverMobile:", driverMobile);
   console.log("📄 dispatchInfo:", dispatchInfo);
 
-  // ── Sort filteredWindows by windowSeriesNumber ASCENDING ──────
-// ── Sort filteredWindows by windowSeriesNumber ASCENDING (nulls at bottom) ──
-filteredWindows = [...filteredWindows].sort((a, b) => {
-  const aRaw = a.windowSeriesNumber;
-  const bRaw = b.windowSeriesNumber;
+  // ── Sort helper: ascending by windowSeriesNumber (nulls/empty at bottom) ──
+  const sortByWinSr = (arr) =>
+    [...arr].sort((a, b) => {
+      const aRaw = a.windowSeriesNumber;
+      const bRaw = b.windowSeriesNumber;
+      const aEmpty = aRaw === null || aRaw === undefined || String(aRaw).trim() === "";
+      const bEmpty = bRaw === null || bRaw === undefined || String(bRaw).trim() === "";
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      const aVal = parseInt(aRaw, 10);
+      const bVal = parseInt(bRaw, 10);
+      if (!isNaN(aVal) && !isNaN(bVal)) return aVal - bVal;
+      return String(aRaw).localeCompare(String(bRaw));
+    });
 
-  const aEmpty = aRaw === null || aRaw === undefined || String(aRaw).trim() === "";
-  const bEmpty = bRaw === null || bRaw === undefined || String(bRaw).trim() === "";
+  // ── Split into two groups ──────────────────────────────────────────────────
+  // Group A: rows that have a non-empty windowSeriesNumber
+  // Group B: rows that don't have a windowSeriesNumber (null / undefined / "")
+  const hasWinSr = (w) => {
+    const v = w.windowSeriesNumber;
+    return v !== null && v !== undefined && String(v).trim() !== "";
+  };
 
-  // Both empty → keep original order
-  if (aEmpty && bEmpty) return 0;
-  // a empty → push a to bottom
-  if (aEmpty) return 1;
-  // b empty → push b to bottom
-  if (bEmpty) return -1;
+  const groupA = sortByWinSr(filteredWindows.filter((w) => hasWinSr(w)));
+  const groupB = sortByWinSr(filteredWindows.filter((w) => !hasWinSr(w)));
 
-  // Both have values — numeric sort first, string fallback
-  const aVal = parseInt(aRaw, 10);
-  const bVal = parseInt(bRaw, 10);
-  if (!isNaN(aVal) && !isNaN(bVal)) return aVal - bVal;
-  return String(aRaw).localeCompare(String(bRaw));
-});
+  // ── Row-mapper: returns a jsPDF-autoTable body row ─────────────────────────
+  const toRow = (w, index) => [
+    index + 1,
+    w?.trip?.id ?? w?.tripId ?? "N/A",
+    w.windowSeriesNumber || "N/A",
+    w?.flat?.flatNumber ?? w?.flatNumber ?? "N/A",
+    w.location || "N/A",
+    w.wcodeNo || w.wCodeNo || "N/A",
+    w.description || "N/A",
+    w.jobCardNo || "N/A",
+    w.series || "N/A",
+    w.width || 0,
+    w.height || 0,
+    w.trackOuter || 0,
+    w.bottomFix || 0,
+    w.glassShutter || 0,
+    w.meshShutter || 0,
+    w.units || 0,
+    w.sqft != null ? Number(w.sqft).toFixed(2) : "0.00",
+  ];
 
+  // ── Subtotal-row builder ───────────────────────────────────────────────────
+  const buildSubtotalRow = (group, label) => {
+    const totalTrack  = group.reduce((s, w) => s + (parseInt(w.trackOuter)   || 0), 0);
+    const totalBottom = group.reduce((s, w) => s + (parseInt(w.bottomFix)    || 0), 0);
+    const totalGlass  = group.reduce((s, w) => s + (parseInt(w.glassShutter) || 0), 0);
+    const totalMesh   = group.reduce((s, w) => s + (parseInt(w.meshShutter)  || 0), 0);
+    const totalUnits  = group.reduce((s, w) => s + (parseInt(w.units)        || 0), 0);
+    const totalSqFt   = group.reduce((s, w) => {
+      const val = parseFloat(w.sqft);
+      return s + (isNaN(val) ? 0 : val);
+    }, 0);
+    return {
+      row: ["", "", "", "", "", "", "", label, "", "", "", totalTrack, totalBottom, totalGlass, totalMesh, totalUnits, totalSqFt.toFixed(2)],
+      sqft: totalSqFt,
+    };
+  };
+
+  // ── Grand totals across ALL windows ───────────────────────────────────────
+  const grandTotalTrack  = filteredWindows.reduce((s, w) => s + (parseInt(w.trackOuter)   || 0), 0);
+  const grandTotalBottom = filteredWindows.reduce((s, w) => s + (parseInt(w.bottomFix)    || 0), 0);
+  const grandTotalGlass  = filteredWindows.reduce((s, w) => s + (parseInt(w.glassShutter) || 0), 0);
+  const grandTotalMesh   = filteredWindows.reduce((s, w) => s + (parseInt(w.meshShutter)  || 0), 0);
+  const grandTotalUnits  = filteredWindows.reduce((s, w) => s + (parseInt(w.units)        || 0), 0);
+  const grandTotalSqFt   = filteredWindows.reduce((s, w) => {
+    const val = parseFloat(w.sqft);
+    return s + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  // ── Build final table body ─────────────────────────────────────────────────
+  //
+  //  Structure:
+  //    [Group A rows]
+  //    [Subtotal A row]          ← only if groupA has items
+  //    [Empty separator row]     ← only if BOTH groups have items
+  //    [Group B rows]            ← only if groupB has items
+  //    [Subtotal B row]          ← only if groupB has items
+  //    [Grand total row]
+  //
+  const tableBody = [];
+
+  // Track row indices so we can style them correctly in didParseCell
+  let subtotalAIndex   = -1;
+  let separatorIndex   = -1;
+  let subtotalBIndex   = -1;
+  let grandTotalIndex  = -1;
+
+  // — Group A —
+  groupA.forEach((w, i) => tableBody.push(toRow(w, i)));
+
+  if (groupA.length > 0) {
+    const { row: subRowA } = buildSubtotalRow(groupA, "Sub Total ");
+    subtotalAIndex = tableBody.length;
+    tableBody.push(subRowA);
+  }
+
+  // — Separator (blank row) — only when both groups have data
+  if (groupA.length > 0 && groupB.length > 0) {
+    separatorIndex = tableBody.length;
+    tableBody.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+  }
+
+  // — Group B —
+  groupB.forEach((w, i) => tableBody.push(toRow(w, groupA.length + i)));
+
+  if (groupB.length > 0) {
+    const { row: subRowB } = buildSubtotalRow(groupB, "Sub Total ");
+    subtotalBIndex = tableBody.length;
+    tableBody.push(subRowB);
+  }
+
+  // — Grand total row —
+  const grandTotalRow = [
+    "", "", "", "", "", "", "", "Grand Total", "", "", "",
+    grandTotalTrack, grandTotalBottom, grandTotalGlass, grandTotalMesh, grandTotalUnits,
+    grandTotalSqFt.toFixed(2),
+  ];
+  grandTotalIndex = tableBody.length;
+  tableBody.push(grandTotalRow);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PDF DOCUMENT SETUP  (all header/layout code unchanged)
+  // ═══════════════════════════════════════════════════════════════════════════
   const doc       = new jsPDF("portrait");
   const refWindow = filteredWindows[0];
   const refTrip   = refWindow?.trip || {};
@@ -462,13 +569,13 @@ filteredWindows = [...filteredWindows].sort((a, b) => {
   const leftValue         = 57;
   const rightLabel        = 112;
   const rightValue        = 150;
-  const dividerX          = 108;   // vertical divider between left / right info columns
+  const dividerX          = 108;
   const maxTextWidthLeft  = 48;
   const maxTextWidthRight = 45;
 
   const rowGap     = 7;
-  const dividerY   = 53;           // horizontal line separating address from info rows
-  const infoStartY = 60;           // first info row (Client Name) — 7 mm below dividerY
+  const dividerY   = 53;
+  const infoStartY = 60;
 
   const fitText = (text, maxWidth, fontSize = 9) => {
     doc.setFontSize(fontSize);
@@ -533,7 +640,7 @@ filteredWindows = [...filteredWindows].sort((a, b) => {
   doc.setTextColor(0, 0, 0);
   doc.text("ONEDEO LEELA FACADE SYSTEMS PRIVATE LIMITED", 105, 14, { align: "center" });
 
-  // ── Address block (8 lines × 4.2 mm spacing, starts at y=20) ──
+  // ── Address block ──────────────────────────────────────────
   doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
   [
@@ -553,7 +660,7 @@ filteredWindows = [...filteredWindows].sort((a, b) => {
   doc.setLineWidth(0.3);
   doc.line(boxLeft, dividerY, boxRight, dividerY);
 
-  // ── Vertical divider between left / right info columns ──────
+  // ── Vertical divider ────────────────────────────────────────
   doc.line(dividerX, dividerY, dividerX, boxBottom);
 
   // ── Left info rows ───────────────────────────────────────────
@@ -590,7 +697,7 @@ filteredWindows = [...filteredWindows].sort((a, b) => {
   doc.line(boxLeft, disclaimerY + 2, boxRight, disclaimerY + 2);
 
   // ═══════════════════════════════════════════════════════════
-  // TABLE
+  // TABLE  — updated section
   // ═══════════════════════════════════════════════════════════
   const tableStartY = disclaimerY + 6;
 
@@ -600,44 +707,9 @@ filteredWindows = [...filteredWindows].sort((a, b) => {
     "Track", "Bottom", "Glass", "Mesh", "Unit", "SqFt",
   ];
 
-  const windowTableRows = filteredWindows.map((w, index) => [
-    index + 1,
-    w?.trip?.id ?? w?.tripId ?? "N/A",
-    w.windowSeriesNumber || "N/A",
-    w?.flat?.flatNumber ?? w?.flatNumber ?? "N/A",
-    w.location || "N/A",
-    w.wcodeNo || w.wCodeNo || "N/A",
-    w.description || "N/A",
-    w.jobCardNo || "N/A",
-    w.series || "N/A",
-    w.width || 0,
-    w.height || 0,
-    w.trackOuter || 0,
-    w.bottomFix || 0,
-    w.glassShutter || 0,
-    w.meshShutter || 0,
-    w.units || 0,
-    (w.sqft != null ? Number(w.sqft).toFixed(2) : "0.00"),
-  ]);
-
-  const totalTrack  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.trackOuter)   || 0), 0);
-  const totalBottom = filteredWindows.reduce((sum, w) => sum + (parseInt(w.bottomFix)    || 0), 0);
-  const totalGlass  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.glassShutter) || 0), 0);
-  const totalMesh   = filteredWindows.reduce((sum, w) => sum + (parseInt(w.meshShutter)  || 0), 0);
-  const totalUnits  = filteredWindows.reduce((sum, w) => sum + (parseInt(w.units)        || 0), 0);
-  const totalSqFt   = filteredWindows.reduce((sum, w) => {
-    const val = parseFloat(w.sqft);
-    return sum + (isNaN(val) ? 0 : val);
-  }, 0);
-
-  const totalsRow = [
-    "", "", "", "", "", "", "", "", "", "", "",
-    totalTrack, totalBottom, totalGlass, totalMesh, totalUnits, totalSqFt.toFixed(2),
-  ];
-
   autoTable(doc, {
     head: [tableColumn],
-    body: [...windowTableRows, totalsRow],
+    body: tableBody,
     startY: tableStartY,
     theme: "grid",
     styles: {
@@ -652,16 +724,40 @@ filteredWindows = [...filteredWindows].sort((a, b) => {
     },
     columnStyles: { 6: { cellWidth: 22 } },
     didParseCell: function (data) {
-      if (data.row.index === windowTableRows.length) {
-        data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fillColor = [230, 230, 230];
+      const idx = data.row.index;
+
+      // — Subtotal A row (light blue) —
+      if (idx === subtotalAIndex) {
+        data.cell.styles.fontStyle  = "bold";
+        data.cell.styles.fillColor  = [210, 230, 255];
+        data.cell.styles.textColor  = [0, 0, 128];
+      }
+
+      // — Blank separator row —
+      if (idx === separatorIndex) {
+        data.cell.styles.fillColor  = [255, 255, 255];
+        data.cell.styles.lineWidth  = 0;
+      }
+
+      // — Subtotal B row (light orange) —
+      if (idx === subtotalBIndex) {
+        data.cell.styles.fontStyle  = "bold";
+        data.cell.styles.fillColor  = [255, 235, 210];
+        data.cell.styles.textColor  = [150, 60, 0];
+      }
+
+      // — Grand total row (dark gray) —
+      if (idx === grandTotalIndex) {
+        data.cell.styles.fontStyle  = "bold";
+        data.cell.styles.fillColor  = [200, 200, 200];
+        data.cell.styles.textColor  = [0, 0, 0];
       }
     },
     margin: { left: 10, right: 10 },
   });
 
   // ═══════════════════════════════════════════════════════════
-  // FOOTER — with page overflow protection
+  // FOOTER — unchanged
   // ═══════════════════════════════════════════════════════════
   const finalY       = (doc.lastAutoTable?.finalY || tableStartY) + 10;
   const pageHeight   = doc.internal.pageSize.getHeight();
@@ -681,15 +777,13 @@ filteredWindows = [...filteredWindows].sort((a, b) => {
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
-  doc.text(`Total SqFt: ${totalSqFt.toFixed(2)}`, 155, footerY + 8);
+  doc.text(`Total SqFt: ${grandTotalSqFt.toFixed(2)}`, 155, footerY + 8);
   doc.text("Prepared By: ________________", 10,  footerY + 20);
   doc.text("Checked By: ________________",  75,  footerY + 20);
   doc.text("Recv. Sign & Stamp: ________", 145,  footerY + 20);
 
   doc.save(`Onedeo_Report_Trip_${tripInput || "All"}.pdf`);
 };
-
-
 
   const filteredWindowsByCriteria = windows.filter((w) => {
     if (tripIdFilter && (w?.trip?.id ?? w?.tripId)?.toString() !== tripIdFilter) return false;
