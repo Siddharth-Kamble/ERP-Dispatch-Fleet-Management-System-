@@ -7,10 +7,11 @@ import {
   FaChevronRight, FaSearch, FaCalendarAlt, FaLink,
   FaCheck, FaExclamationCircle, FaClock, FaBan,
   FaDownload, FaUser, FaBuilding, FaChevronDown, FaChevronUp,
-  FaBell, FaColumns,
+  FaBell, FaColumns, FaFileExcel,
 } from "react-icons/fa";
 import { FaRegClock } from "react-icons/fa";
 import axios from "axios";
+import XLSX from "xlsx-js-style";
 
 const BASE     = process.env.REACT_APP_API_URL || "http://localhost:8080";
 const PROJ_API = `${BASE}/projects`;
@@ -22,7 +23,6 @@ const DEPARTMENTS    = [
   "POWDER COATING", "SITE", "ACCOUNTS", "MD", "OTHER",
 ];
 
-// Linking trigger types
 const LINK_TRIGGER_OPTIONS = [
   { value: "END_TO_START",    label: "When linked item ENDS → this starts" },
   { value: "START_TO_START",  label: "When linked item STARTS → this starts" },
@@ -54,6 +54,20 @@ const FIELD_LABELS = {
   remark:       "Remark",
   srNo:         "SR No",
 };
+
+// All exportable fields with their labels
+const EXPORT_FIELDS = [
+  { key: "lineItemName", label: "Line Item" },
+  { key: "revNo",        label: "Rev #" },
+  { key: "whatChanged",  label: "What Changed" },
+  { key: "from",         label: "From" },
+  { key: "to",           label: "To" },
+  { key: "shift",        label: "Shift (days)" },
+  { key: "reason",       label: "Reason" },
+  { key: "changedBy",    label: "Changed By" },
+  { key: "changedAt",    label: "Changed At" },
+  { key: "alsoAffected", label: "Also Affected" },
+];
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 const daysBetween = (a, b) => {
@@ -97,362 +111,439 @@ const NAV = [
 ];
 
 
-// ─── Download history (Revision Table Format) ────────────────────────────────
-function downloadHistory(history, title = "Change History", projectName = "", workName = "") {
-  if (!history || history.length === 0) { alert("No history to download."); return; }
-
-  const lines = [];
-
-  // ── Header ──────────────────────────────────────────────────────────────────
-  lines.push("=".repeat(90));
-  lines.push(`  CHANGE HISTORY REPORT`);
-  lines.push(`  Project      : ${projectName || "—"}`);
-  lines.push(`  Work         : ${workName || "—"}`);
-  lines.push(`  Downloaded   : ${fmtDateTime(new Date().toISOString())}`);
-  lines.push(`  Total Changes: ${history.length}`);
-  lines.push("=".repeat(90));
-  lines.push("");
-
-  // ── Group history by lineItemName ───────────────────────────────────────────
-  const grouped = {};
-  history.forEach((h) => {
-    const key = h.lineItemName || "Unknown Item";
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(h);
-  });
-
-  const COL_W = 22; // width of each revision column
-  const LABEL_W = 16; // width of the field label column
-
-  const pad = (str, len) => {
-    const s = String(str ?? "—");
-    return s.length >= len ? s.substring(0, len - 1) + " " : s + " ".repeat(len - s.length);
-  };
-
-  const divider = (char = "-") =>
-    pad("", LABEL_W) + "+".padEnd(1) + Array.from({ length: Object.keys(grouped).length > 0 ? 1 : 1 }, () => char.repeat(COL_W)).join("+");
-
-  // ── Per Line Item block ─────────────────────────────────────────────────────
-  Object.entries(grouped).forEach(([itemName, revisions]) => {
-    // Line item title
-    lines.push(`LINE ITEM: ${itemName}`);
-    lines.push("─".repeat(90));
-
-    // ── Column headers: REV 1, REV 2 ... ──────────────────────────────────────
-    const revCount = revisions.length;
-    const headerRow1 = pad("FIELD", LABEL_W) + "| " +
-      revisions.map((h, i) => {
-        const label = `REV ${i + 1}`;
-        return pad(label, COL_W);
-      }).join("| ");
-
-    // Delay badge per revision (e.g. +5D / -2D)
-    const headerRow2 = pad("", LABEL_W) + "| " +
-      revisions.map((h) => {
-        if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-          const diff = daysBetween(h.oldValue, h.newValue);
-          if (diff !== 0) {
-            const badge = diff > 0 ? `+${diff}D` : `${diff}D`;
-            return pad(badge, COL_W);
-          }
-        }
-        return pad("", COL_W);
-      }).join("| ");
-
-    const separator = pad("", LABEL_W) + "+-" + revisions.map(() => "-".repeat(COL_W)).join("+-");
-
-    lines.push(headerRow1);
-    lines.push(headerRow2);
-    lines.push(separator);
-
-    // ── Rows ──────────────────────────────────────────────────────────────────
-
-    // WHAT CHANGED
-    lines.push(
-      pad("WHAT CHANGED", LABEL_W) + "| " +
-      revisions.map((h) => pad(FIELD_LABELS[h.field] || h.field || "—", COL_W)).join("| ")
-    );
-    lines.push(separator);
-
-    // FROM
-    lines.push(
-      pad("FROM", LABEL_W) + "| " +
-      revisions.map((h) => {
-        const val = h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—");
-        return pad(val, COL_W);
-      }).join("| ")
-    );
-    lines.push(separator);
-
-    // TO
-    lines.push(
-      pad("TO", LABEL_W) + "| " +
-      revisions.map((h) => {
-        const val = h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—");
-        return pad(val, COL_W);
-      }).join("| ")
-    );
-    lines.push(separator);
-
-    // SHIFT (delay in days)
-    lines.push(
-      pad("SHIFT", LABEL_W) + "| " +
-      revisions.map((h) => {
-        if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-          const diff = daysBetween(h.oldValue, h.newValue);
-          if (diff !== 0) return pad(`${diff > 0 ? `+${diff}d` : `${diff}d`}`, COL_W);
-        }
-        return pad("—", COL_W);
-      }).join("| ")
-    );
-    lines.push(separator);
-
-    // REASON
-    lines.push(
-      pad("REASON", LABEL_W) + "| " +
-      revisions.map((h) => pad(h.reason || "No reason provided", COL_W)).join("| ")
-    );
-    lines.push(separator);
-
-    // CHANGED BY
-    lines.push(
-      pad("CHANGED BY", LABEL_W) + "| " +
-      revisions.map((h) => pad(h.changedBy || "System", COL_W)).join("| ")
-    );
-    lines.push(separator);
-
-    // CHANGED AT
-    lines.push(
-      pad("CHANGED AT", LABEL_W) + "| " +
-      revisions.map((h) => pad(fmtDateTime(h.changedAt), COL_W)).join("| ")
-    );
-    lines.push(separator);
-
-    // ALSO AFFECTED
-    const hasAffected = revisions.some((h) => h.cascadedItemNames);
-    if (hasAffected) {
-      lines.push(
-        pad("ALSO AFFECTED", LABEL_W) + "| " +
-        revisions.map((h) => pad(h.cascadedItemNames || "—", COL_W)).join("| ")
-      );
-      lines.push(separator);
-    }
-
-    lines.push("");
-  });
-
-  // ── Footer ──────────────────────────────────────────────────────────────────
-  lines.push("=".repeat(90));
-  lines.push("  End of Report");
-  lines.push("=".repeat(90));
-
-  // ── Filename: ProjectName_WorkName_history.txt ───────────────────────────────
-  const safeName = (s) => (s || "unknown").replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_");
-  const filename = `${safeName(projectName)}_${safeName(workName)}_history.txt`;
-
-  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-// ─── Download history (enhanced with project + work name header) ──────────────
-//function downloadHistory(history, title = "Change History", projectName = "", workName = "") {
-//  if (!history || history.length === 0) { alert("No history to download."); return; }
-//  const lines = [
-//    "=".repeat(70),
-//    `  CHANGE HISTORY REPORT`,
-//    `  Project  : ${projectName || "—"}`,
-//    `  Work     : ${workName || "—"}`,
-//    `  Downloaded: ${fmtDateTime(new Date().toISOString())}`,
-//    `  Total Changes: ${history.length}`,
-//    "=".repeat(70), "",
-//  ];
-//  history.forEach((h, i) => {
-//    lines.push(`[${i + 1}] ${h.lineItemName || "Unknown Item"}`);
-//    lines.push(`    What changed : ${FIELD_LABELS[h.field] || h.field}`);
-//    lines.push(`    From         : ${h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}`);
-//    lines.push(`    To           : ${h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}`);
-//    if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-//      const diff = daysBetween(h.oldValue, h.newValue);
-//      if (diff !== 0)
-//        lines.push(`    Delay        : ${diff > 0 ? `+${diff}` : diff} days ${diff > 0 ? "(delayed)" : "(moved earlier)"}`);
-//    }
-//    lines.push(`    Reason       : ${h.reason || "No reason provided"}`);
-//    lines.push(`    Changed By   : ${h.changedBy || "System"}`);
-//    lines.push(`    Changed At   : ${fmtDateTime(h.changedAt)}`);
-//    if (h.cascadedItemNames) lines.push(`    Also affected: ${h.cascadedItemNames}`);
-//    lines.push("");
-//  });
-//  lines.push("=".repeat(70));
-//  lines.push("End of Report");
-//  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-//  const url  = URL.createObjectURL(blob);
-//  const a    = document.createElement("a");
-//  a.href = url; a.download = `history-${Date.now()}.txt`; a.click();
-//  URL.revokeObjectURL(url);
-//}
-function downloadRevisions(history, projectName, workName) {
-  if (!history || history.length === 0) { alert("No revisions to download."); return; }
+function exportToExcel({ history, selectedItems, selectedFields, projectName, workName, sheetLabel }) {
+  if (!history || history.length === 0) { alert("No data to export."); return; }
 
   const byItem = {};
-  history.forEach(h => {
-    const key = h.lineItemId || h.lineItemName;
-    if (!byItem[key]) byItem[key] = { name: h.lineItemName, changes: [] };
-    byItem[key].changes.push(h);
+  [...history]
+    .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt))
+    .forEach(h => {
+      const key = h.lineItemName || "Unknown";
+      if (!byItem[key]) byItem[key] = [];
+      byItem[key].push(h);
+    });
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Summary sheet ──────────────────────────────────────────────────────────
+  const summaryData = [
+    ["CHANGE HISTORY REPORT"],
+    [],
+    ["Project",       projectName || "—"],
+    ["Work",          workName    || "—"],
+    ["Downloaded",    fmtDateTime(new Date().toISOString())],
+    ["Total Changes", history.filter(h => selectedItems.includes(h.lineItemName || "Unknown")).length],
+    [],
+  ];
+  const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+  summaryWs["!cols"] = [{ wch: 20 }, { wch: 50 }];
+  XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
+
+  // ── Pivot / Matrix sheet ───────────────────────────────────────────────────
+  const filteredItems = Object.entries(byItem)
+    .filter(([name]) => selectedItems.includes(name));
+
+  const rows    = [];
+  const merges  = [];
+
+  let currentRow = 0;
+
+  // ── Report header (rows 0-1) ───────────────────────────────────────────────
+  rows.push(["CHANGE HISTORY REPORT"]);
+  rows.push([
+    `Project: ${projectName || "—"}`,
+    "",
+    `Work: ${workName || "—"}`,
+    "",
+    `Downloaded: ${fmtDateTime(new Date().toISOString())}`,
+    "",
+    `Total Changes: ${history.filter(h => selectedItems.includes(h.lineItemName || "Unknown")).length}`,
+  ]);
+  rows.push([]); // blank
+  currentRow = 3;
+
+  filteredItems.forEach(([itemName, changes]) => {
+    const totalCols = 1 + changes.length;
+
+    // LINE ITEM header row
+    const lineItemRow = [`LINE ITEM: ${itemName}`];
+    for (let i = 1; i < totalCols; i++) lineItemRow.push("");
+    rows.push(lineItemRow);
+    merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: totalCols - 1 } });
+    currentRow++;
+
+    // REV column header row
+    const revHeaderRow = ["FIELD"];
+    changes.forEach((h, i) => {
+      const isDate = h.field?.includes("Date");
+      const diff   = isDate ? daysBetween(h.oldValue, h.newValue) : 0;
+      const badge  = diff !== 0 ? ` (${diff > 0 ? "+" : ""}${diff}D)` : "";
+      revHeaderRow.push(`REV ${i + 1}${badge}`);
+    });
+    rows.push(revHeaderRow);
+    currentRow++;
+
+    // Data rows
+    const dataRowDefs = [
+      { label: "WHAT CHANGED", render: h => FIELD_LABELS[h.field] || h.field || "—" },
+      { label: "FROM",         render: h => h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—") },
+      { label: "TO",           render: h => h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—") },
+      { label: "REASON",       render: h => h.reason || "—" },
+      { label: "CHANGED BY",   render: h => h.changedBy || "System" },
+      { label: "CHANGED AT",   render: h => fmtDateTime(h.changedAt) },
+    ];
+
+    dataRowDefs.forEach(({ label, render }) => {
+      const row = [label];
+      changes.forEach(h => row.push(render(h)));
+      rows.push(row);
+      currentRow++;
+    });
+
+    rows.push([]);
+    currentRow++;
   });
 
-  const LABEL_W = 15;
-  const COL_W   = 20;
+  // ── Build worksheet ────────────────────────────────────────────────────────
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!merges"] = merges;
 
-  const cell = (str, w) => {
-    const s = String(str ?? "—");
-    return s.length >= w ? s.substring(0, w - 1) + " " : s + " ".repeat(w - s.length);
-  };
+  // ── Style: Report title (row 0) ────────────────────────────────────────────
+  const titleCell = XLSX.utils.encode_cell({ r: 0, c: 0 });
+  if (ws[titleCell]) {
+    ws[titleCell].s = {
+      font:      { bold: true, sz: 14, color: { rgb: "FFFFFF" }, name: "Arial" },
+      fill:      { fgColor: { rgb: "0F172A" } },
+      alignment: { horizontal: "left", vertical: "center" },
+    };
+  }
 
-  const row = (label, cols) =>
-    `${cell(label, LABEL_W)}| ${cols.map(c => cell(c, COL_W)).join("| ")}`;
+  // ── Style: Info row (row 1) ────────────────────────────────────────────────
+  for (let c = 0; c < 7; c++) {
+    const cell = XLSX.utils.encode_cell({ r: 1, c });
+    if (ws[cell]) {
+      ws[cell].s = {
+        font: { bold: true, sz: 10, color: { rgb: "334155" }, name: "Arial" },
+        fill: { fgColor: { rgb: "F1F5F9" } },
+      };
+    }
+  }
 
-  const sep = (revCount) =>
-    `${cell("", LABEL_W)}+-${Array(revCount).fill("-".repeat(COL_W)).join("+-")}`;
-
-  const lines = [
-    "=".repeat(90),
-    `  REVISION HISTORY REPORT`,
-    `  Project    : ${projectName || "—"}`,
-    `  Work       : ${workName    || "—"}`,
-    `  Downloaded : ${fmtDateTime(new Date().toISOString())}`,
-    "=".repeat(90),
-    "",
+  // ── Style: Per line item blocks ────────────────────────────────────────────
+  // Row label colors for the 6 data rows
+  const ROW_LABEL_COLORS = [
+    { bg: "EFF6FF", text: "1E40AF" }, // WHAT CHANGED — blue
+    { bg: "FEF2F2", text: "991B1B" }, // FROM         — red
+    { bg: "F0FDF4", text: "065F46" }, // TO           — green
+    { bg: "FFFBEB", text: "92400E" }, // REASON       — amber
+    { bg: "F5F3FF", text: "5B21B6" }, // CHANGED BY   — violet
+    { bg: "F8FAFC", text: "334155" }, // CHANGED AT   — slate
   ];
 
-  Object.values(byItem).forEach(({ name, changes }) => {
-    const revCount = changes.length;
+  // Row background for value cells (same color family, lighter)
+  const ROW_VALUE_BG = [
+    "F8FAFC", // WHAT CHANGED
+    "FEF2F2", // FROM
+    "F0FDF4", // TO
+    "FFFBEB", // REASON
+    "FAFAFA", // CHANGED BY
+    "FFFFFF", // CHANGED AT
+  ];
 
-    lines.push(`LINE ITEM: ${name}`);
-    lines.push("─".repeat(90));
-    lines.push(row("FIELD", changes.map((_, i) => `REV ${i + 1}`)));
-    lines.push(row("", changes.map(h => {
-      if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-        const d = daysBetween(h.oldValue, h.newValue);
-        if (d !== 0) return d > 0 ? `+${d}D` : `${d}D`;
-      }
-      return "";
-    })));
-    lines.push(sep(revCount));
-    lines.push(row("WHAT CHANGED", changes.map(h => FIELD_LABELS[h.field] || h.field || "—")));
-    lines.push(sep(revCount));
-    lines.push(row("FROM", changes.map(h =>
-      h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")
-    )));
-    lines.push(sep(revCount));
-    lines.push(row("TO", changes.map(h =>
-      h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")
-    )));
-    lines.push(sep(revCount));
-    lines.push(row("SHIFT", changes.map(h => {
-      if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-        const d = daysBetween(h.oldValue, h.newValue);
-        if (d !== 0) return d > 0 ? `+${d}d` : `${d}d`;
-      }
-      return "—";
-    })));
-    lines.push(sep(revCount));
-    lines.push(row("REASON", changes.map(h => h.reason || "—")));
-    lines.push(sep(revCount));
-    lines.push(row("CHANGED BY", changes.map(h => h.changedBy || "System")));
-    lines.push(sep(revCount));
-    lines.push(row("CHANGED AT", changes.map(h => fmtDateTime(h.changedAt))));
-    lines.push(sep(revCount));
+  let r = 3;
+  filteredItems.forEach(([itemName, changes]) => {
+    const totalCols = 1 + changes.length;
 
-    // ── ALSO AFFECTED (multi-line, full names) ────────────────────────────────
-    if (changes.some(h => h.cascadedItemNames)) {
-      const affectedCols = changes.map(h => {
-        if (!h.cascadedItemNames) return ["—"];
-        const names = Array.isArray(h.cascadedItemNames)
-          ? h.cascadedItemNames
-          : h.cascadedItemNames.split(",").map(s => s.trim());
-        return names;
-      });
-      const maxRows = Math.max(...affectedCols.map(a => a.length));
-      for (let r = 0; r < maxRows; r++) {
-        lines.push(row(
-          r === 0 ? "ALSO AFFECTED" : "",
-          affectedCols.map(names => names[r] || "")
-        ));
-      }
-      lines.push(sep(revCount));
+    // ── LINE ITEM header: dark navy, white bold text ────────────────────────
+    for (let c = 0; c < totalCols; c++) {
+      const cell = XLSX.utils.encode_cell({ r, c });
+      if (!ws[cell]) ws[cell] = { v: c === 0 ? `LINE ITEM: ${itemName}` : "", t: "s" };
+      ws[cell].s = {
+        font:      { bold: true, sz: 11, color: { rgb: "FFFFFF" }, name: "Arial" },
+        fill:      { fgColor: { rgb: "0F172A" } },
+        alignment: { horizontal: "left", vertical: "center", wrapText: false },
+        border:    { bottom: { style: "medium", color: { rgb: "10B981" } } }, // emerald bottom line
+      };
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    r++;
 
-    lines.push("");
+    // ── REV header row ─────────────────────────────────────────────────────
+    // Col 0: "FIELD" label — dark slate
+    const fieldLabelCell = XLSX.utils.encode_cell({ r, c: 0 });
+    if (ws[fieldLabelCell]) {
+      ws[fieldLabelCell].s = {
+        font:      { bold: true, sz: 9, color: { rgb: "FFFFFF" }, name: "Arial" },
+        fill:      { fgColor: { rgb: "334155" } },
+        alignment: { horizontal: "center", vertical: "center" },
+        border:    { right: { style: "medium", color: { rgb: "10B981" } } },
+      };
+    }
+
+    // Col 1+: REV columns — color by delay/early/neutral
+    for (let c = 1; c < totalCols; c++) {
+      const cell = XLSX.utils.encode_cell({ r, c });
+      if (ws[cell]) {
+        const h      = changes[c - 1];
+        const isDate = h?.field?.includes("Date");
+        const diff   = isDate ? daysBetween(h.oldValue, h.newValue) : 0;
+
+        const bgColor  = diff > 0 ? "FEE2E2"  // red tint   = delayed
+                       : diff < 0 ? "D1FAE5"  // green tint = early
+                       :            "E2E8F0";  // neutral    = no date shift
+
+        const txtColor = diff > 0 ? "991B1B"
+                       : diff < 0 ? "065F46"
+                       :            "1E293B";
+
+        const borderColor = diff > 0 ? "EF4444"
+                          : diff < 0 ? "10B981"
+                          :            "94A3B8";
+
+        ws[cell].s = {
+          font:      { bold: true, sz: 10, color: { rgb: txtColor }, name: "Arial" },
+          fill:      { fgColor: { rgb: bgColor } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: false },
+          border: {
+            bottom: { style: "medium", color: { rgb: borderColor } },
+            right:  { style: "thin",   color: { rgb: "CBD5E1"    } },
+          },
+        };
+      }
+    }
+    r++;
+
+    // ── Data rows: 6 rows ──────────────────────────────────────────────────
+    for (let dr = 0; dr < 6; dr++) {
+      const { bg: labelBg, text: labelText } = ROW_LABEL_COLORS[dr];
+      const valueBg = ROW_VALUE_BG[dr];
+
+      for (let c = 0; c < totalCols; c++) {
+        const cell = XLSX.utils.encode_cell({ r, c });
+        if (ws[cell]) {
+          if (c === 0) {
+            // Label column — colored background per row type
+            ws[cell].s = {
+              font:      { bold: true, sz: 9, color: { rgb: labelText }, name: "Arial" },
+              fill:      { fgColor: { rgb: labelBg } },
+              alignment: { horizontal: "left", vertical: "center", wrapText: false },
+              border: {
+                right:  { style: "medium", color: { rgb: "94A3B8" } },
+                bottom: { style: "thin",   color: { rgb: "E2E8F0" } },
+              },
+            };
+          } else {
+            // Value column — light tinted background matching the row type
+            const isFrom = dr === 1;
+            const isTo   = dr === 2;
+            const isDate = changes[c - 1]?.field?.includes("Date");
+            let txtColor = "334155";
+            if (isFrom && isDate) txtColor = "DC2626"; // red for old date
+            if (isTo   && isDate) txtColor = "059669"; // green for new date
+
+            ws[cell].s = {
+              font:      { sz: 10, color: { rgb: txtColor }, name: "Arial", bold: (isFrom || isTo) && isDate },
+              fill:      { fgColor: { rgb: valueBg } },
+              alignment: { horizontal: "left", vertical: "center", wrapText: true },
+              border: {
+                right:  { style: "thin", color: { rgb: "E2E8F0" } },
+                bottom: { style: "thin", color: { rgb: "E2E8F0" } },
+              },
+            };
+          }
+        }
+      }
+      r++;
+    }
+
+    // blank separator row
+    r++;
   });
 
-  lines.push("=".repeat(90));
-  lines.push("  End of Report");
-  lines.push("=".repeat(90));
+  // ── Column widths ──────────────────────────────────────────────────────────
+  const maxRevs = Math.max(...filteredItems.map(([, changes]) => changes.length), 0);
+  ws["!cols"] = [
+    { wch: 16 },
+    ...Array(maxRevs).fill({ wch: 22 }),
+  ];
+
+  // ── Row heights ────────────────────────────────────────────────────────────
+  ws["!rows"] = rows.map((_, i) => {
+    if (i === 0) return { hpt: 24 };
+    return { hpt: 18 };
+  });
+
+  // Freeze first column
+  ws["!freeze"] = { xSplit: 1, ySplit: 3 };
+
+  XLSX.utils.book_append_sheet(wb, ws, sheetLabel || "Change History");
 
   const safe = s => (s || "unknown").replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/_+/g, "_").trim();
-  const filename = `${safe(projectName)}_${safe(workName)}_revisions.txt`;
-
-  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  const filename = `${safe(projectName)}_${safe(workName)}_revisions.xlsx`;
+  XLSX.writeFile(wb, filename);
 }
-// ─── Download Revisions in horizontal table format ─────────────────────────
-//function downloadRevisions(history, projectName, workName) {
-//  if (!history || history.length === 0) { alert("No revisions to download."); return; }
-//
-//  // Group by lineItemId
-//  const byItem = {};
-//  history.forEach(h => {
-//    const key = h.lineItemId || h.lineItemName;
-//    if (!byItem[key]) byItem[key] = { name: h.lineItemName, changes: [] };
-//    byItem[key].changes.push(h);
-//  });
-//
-//  const lines = [
-//    "=".repeat(90),
-//    `  REVISION HISTORY — HORIZONTAL VIEW`,
-//    `  Project : ${projectName || "—"}`,
-//    `  Work    : ${workName || "—"}`,
-//    `  Downloaded: ${fmtDateTime(new Date().toISOString())}`,
-//    "=".repeat(90), "",
-//  ];
-//
-//  Object.values(byItem).forEach(({ name, changes }) => {
-//    lines.push(`LINE ITEM: ${name}`);
-//    lines.push("-".repeat(80));
-//    changes.forEach((h, i) => {
-//      lines.push(`  Rev ${i + 1}:`);
-//      lines.push(`    Field    : ${FIELD_LABELS[h.field] || h.field}`);
-//      lines.push(`    From     : ${h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}`);
-//      lines.push(`    To       : ${h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}`);
-//      if (h.field?.includes("Date") && h.oldValue && h.newValue) {
-//        const diff = daysBetween(h.oldValue, h.newValue);
-//        if (diff !== 0)
-//          lines.push(`    Shift    : ${diff > 0 ? `+${diff}` : diff} days ${diff > 0 ? "(delayed)" : "(earlier)"}`);
-//      }
-//      lines.push(`    Reason   : ${h.reason || "—"}`);
-//      lines.push(`    Changed  : ${fmtDateTime(h.changedAt)} by ${h.changedBy || "System"}`);
-//      if (h.cascadedItemNames) lines.push(`    Affected : ${h.cascadedItemNames}`);
-//    });
-//    lines.push("");
-//  });
-//  lines.push("=".repeat(90));
-//  lines.push("End of Report");
-//  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
-//  const url  = URL.createObjectURL(blob);
-//  const a    = document.createElement("a");
-//  a.href = url; a.download = `revisions-${Date.now()}.txt`; a.click();
-//  URL.revokeObjectURL(url);
-//}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOWNLOAD SELECTION MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+function DownloadModal({ history, projectName, workName, sheetLabel, onClose }) {
+  // Derive unique line items from history
+  const allItems = [...new Set(history.map(h => h.lineItemName || "Unknown"))];
+
+  const [selectedItems,  setSelectedItems]  = useState(new Set(allItems));
+  const [selectedFields, setSelectedFields] = useState(new Set(EXPORT_FIELDS.map(f => f.key)));
+  const [activeTab, setActiveTab] = useState("items"); // "items" | "fields"
+
+  const toggleItem  = id  => setSelectedItems(s  => { const n = new Set(s); n.has(id)  ? n.delete(id)  : n.add(id);  return n; });
+  const toggleField = key => setSelectedFields(s => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
+
+  const allItemsSelected  = selectedItems.size  === allItems.length;
+  const allFieldsSelected = selectedFields.size === EXPORT_FIELDS.length;
+
+  const handleExport = () => {
+    if (selectedItems.size === 0)  { alert("Select at least one line item.");  return; }
+    if (selectedFields.size === 0) { alert("Select at least one field/column."); return; }
+    exportToExcel({
+      history,
+      selectedItems:  [...selectedItems],
+      selectedFields: EXPORT_FIELDS.filter(f => selectedFields.has(f.key)).map(f => f.key),
+      projectName,
+      workName,
+      sheetLabel,
+    });
+    onClose();
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={{ ...S.modalBox, maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ ...S.modalHead, background: "#0f172a", borderRadius: "14px 14px 0 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <FaFileExcel size={16} color="#10b981" />
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Export to Excel</span>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 4 }}>
+            <FaTimes size={15}/>
+          </button>
+        </div>
+
+        {/* Info bar */}
+        <div style={{ padding: "10px 22px", background: "#f0fdf4", borderBottom: "1px solid #d1fae5", fontSize: 12, color: "#065f46", display: "flex", alignItems: "center", gap: 8 }}>
+          <span>📊</span>
+          <span>
+            <strong>{projectName}</strong> → <strong>{workName}</strong>
+            &nbsp;·&nbsp; {history.length} total revision{history.length !== 1 ? "s" : ""} &nbsp;·&nbsp;
+            <strong style={{ color: "#10b981" }}>{selectedItems.size}</strong> items &nbsp;·&nbsp;
+            <strong style={{ color: "#10b981" }}>{selectedFields.size}</strong> columns selected
+          </span>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", padding: "0 22px" }}>
+          {[{ key: "items", label: `📋 Line Items (${allItems.length})` }, { key: "fields", label: `🗂️ Columns (${EXPORT_FIELDS.length})` }].map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              style={{
+                padding: "12px 18px", background: "none", border: "none", cursor: "pointer",
+                fontSize: 13, fontWeight: 600,
+                color: activeTab === tab.key ? "#10b981" : "#64748b",
+                borderBottom: activeTab === tab.key ? "2px solid #10b981" : "2px solid transparent",
+                marginBottom: -1,
+              }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "16px 22px", overflowY: "auto", maxHeight: 360 }}>
+          {activeTab === "items" && (
+            <div>
+              {/* Select All */}
+              <label style={DL.checkRow} onClick={() => setSelectedItems(allItemsSelected ? new Set() : new Set(allItems))}>
+                <div style={{ ...DL.checkbox, background: allItemsSelected ? "#10b981" : "#fff", borderColor: allItemsSelected ? "#10b981" : "#cbd5e1" }}>
+                  {allItemsSelected && <FaCheck size={8} color="#fff"/>}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>Select All Line Items</span>
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "#94a3b8" }}>{selectedItems.size} / {allItems.length}</span>
+              </label>
+
+              <div style={{ height: 1, background: "#e2e8f0", margin: "10px 0" }} />
+
+              {allItems.map(name => {
+                const count   = history.filter(h => (h.lineItemName || "Unknown") === name).length;
+                const checked = selectedItems.has(name);
+                return (
+                  <label key={name} style={DL.checkRow} onClick={() => toggleItem(name)}>
+                    <div style={{ ...DL.checkbox, background: checked ? "#10b981" : "#fff", borderColor: checked ? "#10b981" : "#cbd5e1" }}>
+                      {checked && <FaCheck size={8} color="#fff"/>}
+                    </div>
+                    <span style={{ fontSize: 13, color: "#334155", flex: 1 }}>{name}</span>
+                    <span style={{ fontSize: 11, background: "#f1f5f9", color: "#64748b", padding: "2px 8px", borderRadius: 20, fontWeight: 600 }}>
+                      {count} rev{count !== 1 ? "s" : ""}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          {activeTab === "fields" && (
+            <div>
+              {/* Select All */}
+              <label style={DL.checkRow} onClick={() => setSelectedFields(allFieldsSelected ? new Set() : new Set(EXPORT_FIELDS.map(f => f.key)))}>
+                <div style={{ ...DL.checkbox, background: allFieldsSelected ? "#10b981" : "#fff", borderColor: allFieldsSelected ? "#10b981" : "#cbd5e1" }}>
+                  {allFieldsSelected && <FaCheck size={8} color="#fff"/>}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>Select All Columns</span>
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "#94a3b8" }}>{selectedFields.size} / {EXPORT_FIELDS.length}</span>
+              </label>
+
+              <div style={{ height: 1, background: "#e2e8f0", margin: "10px 0" }} />
+
+              {EXPORT_FIELDS.map(f => {
+                const checked = selectedFields.has(f.key);
+                return (
+                  <label key={f.key} style={DL.checkRow} onClick={() => toggleField(f.key)}>
+                    <div style={{ ...DL.checkbox, background: checked ? "#10b981" : "#fff", borderColor: checked ? "#10b981" : "#cbd5e1" }}>
+                      {checked && <FaCheck size={8} color="#fff"/>}
+                    </div>
+                    <span style={{ fontSize: 13, color: "#334155" }}>{f.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "14px 22px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: 10, background: "#f8fafc", borderRadius: "0 0 14px 14px" }}>
+          <button onClick={onClose} style={S.cancelBtn}>Cancel</button>
+          <button onClick={handleExport}
+            style={{ ...S.saveBtn, background: "#10b981", gap: 8 }}
+            disabled={selectedItems.size === 0 || selectedFields.size === 0}>
+            <FaFileExcel size={12}/> Export Excel ({selectedItems.size} items, {selectedFields.size} cols)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const DL = {
+  checkRow: {
+    display: "flex", alignItems: "center", gap: 10,
+    padding: "9px 10px", borderRadius: 8, cursor: "pointer",
+    userSelect: "none", transition: "background .1s",
+    "&:hover": { background: "#f8fafc" },
+  },
+  checkbox: {
+    width: 18, height: 18, borderRadius: 5,
+    border: "2px solid #cbd5e1", display: "flex",
+    alignItems: "center", justifyContent: "center",
+    flexShrink: 0, transition: "all .15s",
+  },
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NOTIFICATION HELPERS
@@ -464,24 +555,20 @@ function buildNotifications(lineItems, selProject, selWork) {
   lineItems.forEach(item => {
     const label = `${selProject?.projectName || "?"} → ${selWork?.workName || "?"} → ${item.lineItemName}`;
 
-    // Started today
     if (item.startDate === today && item.status === "IN PROGRESS") {
       notifs.push({ id: `start-${item.id}`, type: "started", label, item, time: item.startDate, msg: "Process started today" });
     }
 
-    // Completed early (endDate in future but status = DONE)
     if (item.status === "DONE" && item.endDate && item.endDate > today) {
       const early = daysBetween(today, item.endDate);
       notifs.push({ id: `early-${item.id}`, type: "early", label, item, time: item.endDate, msg: `Completed ${early} day(s) early 🎉` });
     }
 
-    // Delayed (endDate passed, not done)
     if (item.endDate && item.endDate < today && item.status !== "DONE" && item.status !== "CANCELLED") {
       const delayed = daysBetween(item.endDate, today);
       notifs.push({ id: `delay-${item.id}`, type: "delayed", label, item, time: item.endDate, msg: `Delayed by ${delayed} day(s) ⚠️` });
     }
 
-    // Upcoming start in 3 days
     const daysToStart = daysBetween(today, item.startDate);
     if (daysToStart > 0 && daysToStart <= 3 && item.status === "NOT STARTED") {
       notifs.push({ id: `upcoming-${item.id}`, type: "upcoming", label, item, time: item.startDate, msg: `Starts in ${daysToStart} day(s)` });
@@ -528,6 +615,10 @@ export default function PlanningDashboard({ onBack }) {
   const [notifications, setNotifications] = useState([]);
   const [dismissedNotifs, setDismissedNotifs] = useState(new Set());
 
+  // ── Download modal state ───────────────────────────────────────────────────
+  const [downloadModal, setDownloadModal] = useState(null);
+  // downloadModal = { history, projectName, workName, sheetLabel } | null
+
   // ── Effects ────────────────────────────────────────────────────────────────
   useEffect(() => { loadProjects(); }, []);
   useEffect(() => {
@@ -539,7 +630,6 @@ export default function PlanningDashboard({ onBack }) {
     else setLineItems([]);
   }, [selWork]);
 
-  // Build notifications whenever line items change
   useEffect(() => {
     if (lineItems.length > 0 && selProject && selWork) {
       setNotifications(buildNotifications(lineItems, selProject, selWork));
@@ -617,7 +707,6 @@ export default function PlanningDashboard({ onBack }) {
 
   const doSaveLineItem = async (form, reason) => {
     try {
-      // Normalize linkedItemIds to string before sending
       const payload = {
         ...form,
         workId: selWork.id,
@@ -630,7 +719,6 @@ export default function PlanningDashboard({ onBack }) {
         await axios.put(`${PLAN_API}/line-items/${form.id}`, payload);
         if (reason && editReasonModal?.item) {
           const old = editReasonModal.item;
-          // Only track date, status, remark changes in history
           const trackedFields = ["startDate", "endDate", "status", "remark"];
           const changed = [];
           for (const field of trackedFields) {
@@ -678,64 +766,130 @@ export default function PlanningDashboard({ onBack }) {
     } catch { showToast("Delete failed", "error"); }
   };
 
-  // ── Day-offset date change ─────────────────────────────────────────────────
-  const openDayModal = (item, field) => {
-    setDayModal({ item, field });
-    setDayInput("");
-    setDayReason("");
-  };
+//  const openDayModal = (item, field) => {
+//    setDayModal({ item, field });
+//    setDayInput("");
+//    setDayReason("");
+//  };
 
-  const confirmDayChange = async () => {
-    const days = parseInt(dayInput, 10);
-    if (isNaN(days) || days === 0) { showToast("Enter a valid number of days (non-zero)", "error"); return; }
-    if (!dayReason.trim()) { showToast("Please enter a reason", "error"); return; }
+const openDayModal = (item) => {
+  setDayModal({ item });   // removed "field" — we always shift both dates now
+  setDayInput("");
+  setDayReason("");
+};
 
-    const { item, field } = dayModal;
-    const oldVal = item[field];
-    if (!oldVal) { showToast("Original date is missing — edit the item first", "error"); return; }
-    const newVal = addDaysToDate(oldVal, days);
 
-    // Auto-compute new end date when start date changes (preserve duration)
-    let autoEndDate = null;
-    if (field === "startDate" && item.endDate) {
-      const duration = daysBetween(item.startDate, item.endDate);
-      autoEndDate = addDaysToDate(newVal, duration);
+const confirmDayChange = async () => {
+  const days = parseInt(dayInput, 10);
+  if (isNaN(days) || days === 0) {
+    showToast("Enter a valid number of days (non-zero)", "error");
+    return;
+  }
+  if (!dayReason.trim()) {
+    showToast("Please enter a reason", "error");
+    return;
+  }
+
+  const { item } = dayModal;
+
+  if (!item.startDate) {
+    showToast("Start date is missing — edit the item first", "error");
+    return;
+  }
+
+  const oldStart = item.startDate;
+  const oldEnd   = item.endDate;
+  const newStart = addDaysToDate(oldStart, days);
+  const newEnd   = oldEnd ? addDaysToDate(oldEnd, days) : null;
+
+  try {
+    // ── Shift Start Date ───────────────────────────────────────────────────
+    await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+      field:     "startDate",
+      oldValue:  oldStart,
+      newValue:  newStart,
+      reason:    dayReason,
+      cascade:   Math.abs(days) >= 2,
+      changedBy: "User",
+    });
+
+    // ── Shift End Date (same number of days) ───────────────────────────────
+    if (oldEnd && newEnd) {
+      await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+        field:     "endDate",
+        oldValue:  oldEnd,
+        newValue:  newEnd,
+        reason:    `Auto-adjusted with Start Date — ${dayReason}`,
+        cascade:   Math.abs(days) >= 2,
+        changedBy: "System (auto)",
+      });
     }
 
-    try {
-      const res = await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
-        field,
-        oldValue:  oldVal,
-        newValue:  newVal,
-        reason:    dayReason,
-        cascade:   Math.abs(days) >= 2,
-        changedBy: "User",
-      });
+    // ── Build toast message ────────────────────────────────────────────────
+    const direction = days > 0 ? "forward" : "backward";
+    let msg = `Both dates shifted ${days > 0 ? "+" : ""}${days} days ${direction} ✓`;
+    showToast(msg);
 
-      // If startDate changed, also update endDate with same reason
-      if (field === "startDate" && autoEndDate && autoEndDate !== item.endDate) {
-        await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
-          field:     "endDate",
-          oldValue:  item.endDate,
-          newValue:  autoEndDate,
-          reason:    `Auto-adjusted: same shift as Start Date — ${dayReason}`,
-          cascade:   false,
-          changedBy: "System (auto)",
-        });
-      }
+    setDayModal(null);
+    setDayInput("");
+    setDayReason("");
+    setItemRevisions({});
+    setExpandedItem(null);
+    loadLineItems(selWork.id);
 
-      const cascaded = res.data?.cascadedItems || [];
-      let msg = `Date shifted by ${days > 0 ? "+" : ""}${days} days ✓`;
-      if (autoEndDate && field === "startDate") msg += ` · End Date auto-adjusted`;
-      if (cascaded.length > 0) msg += ` · Also shifted: ${cascaded.join(", ")}`;
-      showToast(msg);
-
-      setDayModal(null); setDayInput(""); setDayReason("");
-      setItemRevisions({});
-      setExpandedItem(null);
-      loadLineItems(selWork.id);
-    } catch { showToast("Failed to update date", "error"); }
-  };
+  } catch {
+    showToast("Failed to update dates", "error");
+  }
+};
+//  const confirmDayChange = async () => {
+//    const days = parseInt(dayInput, 10);
+//    if (isNaN(days) || days === 0) { showToast("Enter a valid number of days (non-zero)", "error"); return; }
+//    if (!dayReason.trim()) { showToast("Please enter a reason", "error"); return; }
+//
+//    const { item, field } = dayModal;
+//    const oldVal = item[field];
+//    if (!oldVal) { showToast("Original date is missing — edit the item first", "error"); return; }
+//    const newVal = addDaysToDate(oldVal, days);
+//
+//    let autoEndDate = null;
+//    if (field === "startDate" && item.endDate) {
+//      const duration = daysBetween(item.startDate, item.endDate);
+//      autoEndDate = addDaysToDate(newVal, duration);
+//    }
+//
+//    try {
+//      const res = await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+//        field,
+//        oldValue:  oldVal,
+//        newValue:  newVal,
+//        reason:    dayReason,
+//        cascade:   Math.abs(days) >= 2,
+//        changedBy: "User",
+//      });
+//
+//      if (field === "startDate" && autoEndDate && autoEndDate !== item.endDate) {
+//        await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+//          field:     "endDate",
+//          oldValue:  item.endDate,
+//          newValue:  autoEndDate,
+//          reason:    `Auto-adjusted: same shift as Start Date — ${dayReason}`,
+//          cascade:   false,
+//          changedBy: "System (auto)",
+//        });
+//      }
+//
+//      const cascaded = res.data?.cascadedItems || [];
+//      let msg = `Date shifted by ${days > 0 ? "+" : ""}${days} days ✓`;
+//      if (autoEndDate && field === "startDate") msg += ` · End Date auto-adjusted`;
+//      if (cascaded.length > 0) msg += ` · Also shifted: ${cascaded.join(", ")}`;
+//      showToast(msg);
+//
+//      setDayModal(null); setDayInput(""); setDayReason("");
+//      setItemRevisions({});
+//      setExpandedItem(null);
+//      loadLineItems(selWork.id);
+//    } catch { showToast("Failed to update date", "error"); }
+//  };
 
   const loadHistory = async (type, id, title) => {
     try {
@@ -776,6 +930,16 @@ export default function PlanningDashboard({ onBack }) {
   }).length;
 
   const activeNotifs = notifications.filter(n => !dismissedNotifs.has(n.id));
+
+  // ── Open download modal helpers ────────────────────────────────────────────
+  const openDownloadModal = (hist, label) => {
+    setDownloadModal({
+      history:     hist,
+      projectName: selProject?.projectName,
+      workName:    selWork?.workName,
+      sheetLabel:  label,
+    });
+  };
 
   // ═══════════════════════════════════════════════════════════════════════════
   return (
@@ -876,7 +1040,6 @@ export default function PlanningDashboard({ onBack }) {
               <KpiCard label="Notifications"  value={activeNotifs.length} icon="🔔" color="#f97316" onClick={() => setActiveNav("notifications")} />
             </div>
 
-            {/* Quick notifications banner */}
             {activeNotifs.length > 0 && (
               <div style={{ marginBottom: 24 }}>
                 <SectionTitle>🔔 Active Alerts</SectionTitle>
@@ -1035,8 +1198,6 @@ export default function PlanningDashboard({ onBack }) {
                         const isExpanded = expandedItem === item.id;
                         const revs = itemRevisions[item.id] || [];
                         const dateRevCount = revs.filter(h => h.field === "startDate" || h.field === "endDate").length;
-
-                        // Parse linked items count from structured format
                         const linkedCount = (item.linkedItemIds || "").split(",").filter(Boolean).length;
 
                         return (
@@ -1141,14 +1302,14 @@ export default function PlanningDashboard({ onBack }) {
           </div>
         )}
 
-        {/* ══ REVISIONS PAGE (Horizontal Columns) ══ */}
+        {/* ══ REVISIONS PAGE ══ */}
         {activeNav === "revisions" && (
           <RevisionsPage
             history={history}
             lineItems={lineItems}
             selProject={selProject}
             selWork={selWork}
-            onDownload={() => downloadRevisions(history, selProject?.projectName, selWork?.workName)}
+            onDownload={() => openDownloadModal(history, "Revisions")}
           />
         )}
 
@@ -1163,11 +1324,11 @@ export default function PlanningDashboard({ onBack }) {
                 <p style={{ margin: "4px 0 0 16px", fontSize: 12, color: "#94a3b8" }}>{historyTitle}</p>
               </div>
               {history.length > 0 && (
-                <button onClick={() => downloadHistory(history, historyTitle, selProject?.projectName, selWork?.workName)}
+                <button onClick={() => openDownloadModal(history, "Change History")}
                   style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px",
-                    background: "#1e293b", color: "#fff", border: "none", borderRadius: 8,
+                    background: "#059669", color: "#fff", border: "none", borderRadius: 8,
                     fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <FaDownload size={12}/> Download History
+                  <FaFileExcel size={13}/> Export to Excel
                 </button>
               )}
             </div>
@@ -1290,33 +1451,31 @@ export default function PlanningDashboard({ onBack }) {
           />
         </Modal>
       )}
+
+      {/* ── Download Selection Modal ── */}
+      {downloadModal && (
+        <DownloadModal
+          history={downloadModal.history}
+          projectName={downloadModal.projectName}
+          workName={downloadModal.workName}
+          sheetLabel={downloadModal.sheetLabel}
+          onClose={() => setDownloadModal(null)}
+        />
+      )}
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// REVISIONS PAGE — Horizontal Column Layout
-// Each line item = one column. Rows = revision number, field, from, to, reason, affected
-// ═══════════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════════
 // HELPER — parse rich cascade string
-// Format: "Name|field|oldValue|newValue;Name2|field|oldValue|newValue"
-// Returns: [{ name, field, oldValue, newValue }, ...]
 // ═══════════════════════════════════════════════════════════════════════════════
 function parseCascadeDetails(raw) {
   if (!raw) return [];
-
-  // Backward-compat: old format was plain "Name1, Name2" (no "|" separators)
-  // If no "|" found at all, treat it as legacy plain names only
   if (!raw.includes("|")) {
     return raw.split(",").map(name => ({
-      name:     name.trim(),
-      field:    null,
-      oldValue: null,
-      newValue: null,
+      name: name.trim(), field: null, oldValue: null, newValue: null,
     })).filter(e => e.name);
   }
-
   return raw.split(";").map(entry => {
     const parts = entry.split("|");
     return {
@@ -1330,20 +1489,11 @@ function parseCascadeDetails(raw) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AFFECTED ITEMS CELL
-// Shows each affected item with:
-//   • Item name
-//   • Which field changed (Start Date / End Date)
-//   • Old value ~~strikethrough~~ → New value (formatted as dates)
-//   • Shift in days pill (+Nd / -Nd)
 // ═══════════════════════════════════════════════════════════════════════════════
 function AffectedItemsCell({ names }) {
   const details = parseCascadeDetails(names);
+  if (details.length === 0) return <span style={{ color: "#cbd5e1", fontSize: 12 }}>None</span>;
 
-  if (details.length === 0) {
-    return <span style={{ color: "#cbd5e1", fontSize: 12 }}>None</span>;
-  }
-
-  // Group by item name — one item can have both startDate and endDate shifted
   const grouped = {};
   details.forEach(d => {
     if (!grouped[d.name]) grouped[d.name] = [];
@@ -1353,95 +1503,29 @@ function AffectedItemsCell({ names }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 220 }}>
       {Object.entries(grouped).map(([itemName, changes], gi) => (
-        <div
-          key={gi}
-          style={{
-            background: "#faf5ff",
-            border: "1px solid #ddd6fe",
-            borderLeft: "3px solid #7c3aed",
-            borderRadius: "0 8px 8px 0",
-            padding: "7px 10px",
-          }}
-        >
-          {/* Item name */}
-          <div style={{
-            fontWeight: 700,
-            fontSize: 12,
-            color: "#4c1d95",
-            marginBottom: 5,
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-          }}>
+        <div key={gi} style={{ background: "#faf5ff", border: "1px solid #ddd6fe", borderLeft: "3px solid #7c3aed", borderRadius: "0 8px 8px 0", padding: "7px 10px" }}>
+          <div style={{ fontWeight: 700, fontSize: 12, color: "#4c1d95", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
             🔗 {itemName}
           </div>
-
-          {/* Each field change for this item */}
           {changes.map((ch, ci) => {
-            // If legacy (no field info), just show the name — already shown above
             if (!ch.field) return null;
-
             const isDate = ch.field?.includes("Date") || ch.field?.includes("date");
             const diff   = isDate ? daysBetween(ch.oldValue, ch.newValue) : 0;
-
             return (
-              <div
-                key={ci}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                  paddingTop: ci > 0 ? 6 : 0,
-                  borderTop: ci > 0 ? "1px dashed #ede9fe" : "none",
-                }}
-              >
-                {/* Field label */}
-                <div style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "#7c3aed",
-                  textTransform: "uppercase",
-                  letterSpacing: ".04em",
-                }}>
+              <div key={ci} style={{ display: "flex", flexDirection: "column", gap: 3, paddingTop: ci > 0 ? 6 : 0, borderTop: ci > 0 ? "1px dashed #ede9fe" : "none" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase", letterSpacing: ".04em" }}>
                   {FIELD_LABELS[ch.field] || ch.field}
                 </div>
-
-                {/* Old → New + shift pill */}
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  flexWrap: "wrap",
-                }}>
-                  <span style={{
-                    color: "#ef4444",
-                    fontWeight: 700,
-                    fontSize: 12,
-                    textDecoration: isDate ? "line-through" : "none",
-                  }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ color: "#ef4444", fontWeight: 700, fontSize: 12, textDecoration: isDate ? "line-through" : "none" }}>
                     {isDate ? fmt(ch.oldValue) : (ch.oldValue || "—")}
                   </span>
-
                   <span style={{ color: "#94a3b8", fontSize: 11 }}>→</span>
-
-                  <span style={{
-                    color: "#059669",
-                    fontWeight: 700,
-                    fontSize: 12,
-                  }}>
+                  <span style={{ color: "#059669", fontWeight: 700, fontSize: 12 }}>
                     {isDate ? fmt(ch.newValue) : (ch.newValue || "—")}
                   </span>
-
-                  {/* Shift pill — only for date fields with a non-zero diff */}
                   {isDate && diff !== 0 && (
-                    <span style={{
-                      background: diff > 0 ? "#fee2e2" : "#d1fae5",
-                      color:      diff > 0 ? "#991b1b" : "#065f46",
-                      padding: "1px 7px",
-                      borderRadius: 20,
-                      fontSize: 11,
-                      fontWeight: 800,
-                    }}>
+                    <span style={{ background: diff > 0 ? "#fee2e2" : "#d1fae5", color: diff > 0 ? "#991b1b" : "#065f46", padding: "1px 7px", borderRadius: 20, fontSize: 11, fontWeight: 800 }}>
                       {diff > 0 ? `+${diff}d` : `${diff}d`}
                     </span>
                   )}
@@ -1459,7 +1543,6 @@ function AffectedItemsCell({ names }) {
 // REVISIONS PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) {
-  // Group history by lineItemId → ordered by changedAt asc
   const byItem = {};
   [...history]
     .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt))
@@ -1483,32 +1566,10 @@ function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) 
     );
   }
 
-  // ── Row definitions ────────────────────────────────────────────────────────
   const ROWS = [
-    {
-      label: "What Changed",
-      render: h => (
-        <span style={RS.fieldPill}>
-          {FIELD_LABELS[h.field] || h.field}
-        </span>
-      ),
-    },
-    {
-      label: "From",
-      render: h => (
-        <span style={{ color: "#ef4444", fontWeight: 700 }}>
-          {h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}
-        </span>
-      ),
-    },
-    {
-      label: "To",
-      render: h => (
-        <span style={{ color: "#059669", fontWeight: 700 }}>
-          {h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}
-        </span>
-      ),
-    },
+    { label: "What Changed", render: h => <span style={RS.fieldPill}>{FIELD_LABELS[h.field] || h.field}</span> },
+    { label: "From", render: h => <span style={{ color: "#ef4444", fontWeight: 700 }}>{h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—")}</span> },
+    { label: "To",   render: h => <span style={{ color: "#059669", fontWeight: 700 }}>{h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—")}</span> },
     {
       label: "Shift",
       render: h => {
@@ -1516,109 +1577,50 @@ function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) 
         const d = daysBetween(h.oldValue, h.newValue);
         if (!d) return <span style={{ color: "#cbd5e1" }}>—</span>;
         return (
-          <span style={{
-            background: d > 0 ? "#fee2e2" : "#d1fae5",
-            color:      d > 0 ? "#991b1b" : "#065f46",
-            padding: "2px 8px",
-            borderRadius: 20,
-            fontWeight: 800,
-          }}>
+          <span style={{ background: d > 0 ? "#fee2e2" : "#d1fae5", color: d > 0 ? "#991b1b" : "#065f46", padding: "2px 8px", borderRadius: 20, fontWeight: 800 }}>
             {d > 0 ? `+${d}d` : `${d}d`}
           </span>
         );
       },
     },
-    {
-      label: "Reason",
-      render: h => (
-        <span style={{ color: "#92400e", fontStyle: "italic" }}>
-          {h.reason || "—"}
-        </span>
-      ),
-    },
-    {
-      label: "Changed At",
-      render: h => (
-        <span style={{ color: "#64748b" }}>
-          {fmtDateTime(h.changedAt)}
-        </span>
-      ),
-    },
+    { label: "Reason",     render: h => <span style={{ color: "#92400e", fontStyle: "italic" }}>{h.reason || "—"}</span> },
+    { label: "Changed At", render: h => <span style={{ color: "#64748b" }}>{fmtDateTime(h.changedAt)}</span> },
     {
       label: "Also Affected",
-      // ✅ Updated: shows name + field + old→new + shift pill per affected item
-      render: h =>
-        h.cascadedItemNames
-          ? <AffectedItemsCell names={h.cascadedItemNames} />
-          : <span style={{ color: "#cbd5e1" }}>None</span>,
+      render: h => h.cascadedItemNames ? <AffectedItemsCell names={h.cascadedItemNames} /> : <span style={{ color: "#cbd5e1" }}>None</span>,
     },
   ];
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div>
-      {/* HEADER */}
-      <div style={{
-        display: "flex", justifyContent: "space-between",
-        alignItems: "flex-start", marginBottom: 20,
-        flexWrap: "wrap", gap: 12,
-      }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h2 style={{
-            margin: 0, fontSize: 21, fontWeight: 700, color: "#1e293b",
-            borderLeft: "4px solid #06b6d4", paddingLeft: 12,
-          }}>
+          <h2 style={{ margin: 0, fontSize: 21, fontWeight: 700, color: "#1e293b", borderLeft: "4px solid #06b6d4", paddingLeft: 12 }}>
             📊 Revisions — Line Item Wise
           </h2>
           <p style={{ margin: "4px 0 0 16px", fontSize: 12, color: "#94a3b8" }}>
             {selProject?.projectName} → {selWork?.workName}
           </p>
         </div>
-
-        <button
-          onClick={onDownload}
-          style={{
-            display: "flex", alignItems: "center", gap: 7,
-            padding: "9px 16px", background: "#1e293b", color: "#fff",
-            border: "none", borderRadius: 8, fontSize: 13,
-            fontWeight: 600, cursor: "pointer",
-          }}
-        >
-          <FaDownload size={12} /> Download Report
+        <button onClick={onDownload}
+          style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <FaFileExcel size={13} /> Export to Excel
         </button>
       </div>
 
-      {/* VERTICAL BLOCKS — one block per line item */}
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         {items.map((item, idx) => {
           const changes = item.changes;
-
           return (
-            <div
-              key={idx}
-              style={{
-                background: "#fff",
-                border: "1px solid #e2e8f0",
-                borderRadius: 10,
-                padding: 16,
-              }}
-            >
-              {/* LINE ITEM TITLE */}
-              <div style={{
-                fontWeight: 800, fontSize: 14,
-                color: "#0f172a", marginBottom: 8,
-              }}>
+            <div key={idx} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: "#0f172a", marginBottom: 8 }}>
                 LINE ITEM: {item.name}
               </div>
-
               <div style={{ height: 1, background: "#e2e8f0", marginBottom: 12 }} />
-
-              {/* TABLE — rows = fields, columns = Rev 1, Rev 2, Rev N */}
               <div style={{ overflowX: "auto" }}>
                 <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
                   <thead>
                     <tr>
-                      {/* Sticky label column */}
                       <th style={RS.rowLabel}>FIELD</th>
                       {changes.map((h, i) => {
                         const isDate  = h.field?.includes("Date");
@@ -1632,13 +1634,7 @@ function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) 
                           }}>
                             <div>Rev {i + 1}</div>
                             {isDate && diff !== 0 && (
-                              <div style={{
-                                fontSize: 10,
-                                background: isDelay ? "#fee2e2" : "#d1fae5",
-                                color:      isDelay ? "#991b1b" : "#065f46",
-                                borderRadius: 20, padding: "1px 7px",
-                                display: "inline-block", marginTop: 3, fontWeight: 800,
-                              }}>
+                              <div style={{ fontSize: 10, background: isDelay ? "#fee2e2" : "#d1fae5", color: isDelay ? "#991b1b" : "#065f46", borderRadius: 20, padding: "1px 7px", display: "inline-block", marginTop: 3, fontWeight: 800 }}>
                                 {isDelay ? `+${diff}d` : `${diff}d`}
                               </div>
                             )}
@@ -1647,15 +1643,12 @@ function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) 
                       })}
                     </tr>
                   </thead>
-
                   <tbody>
                     {ROWS.map((row, ri) => (
                       <tr key={ri} style={{ background: ri % 2 === 0 ? "#fff" : "#fafafa" }}>
                         <td style={RS.rowLabel}>{row.label}</td>
                         {changes.map((h, ci) => (
-                          <td key={ci} style={RS.cell}>
-                            {row.render(h)}
-                          </td>
+                          <td key={ci} style={RS.cell}>{row.render(h)}</td>
                         ))}
                       </tr>
                     ))}
@@ -1669,7 +1662,6 @@ function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) 
     </div>
   );
 }
-//
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NOTIFICATIONS PAGE
@@ -1694,8 +1686,7 @@ function NotificationsPage({ notifications, onDismiss, onDismissAll }) {
           </p>
         </div>
         {notifications.length > 0 && (
-          <button onClick={onDismissAll}
-            style={{ ...S.cancelBtn, display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={onDismissAll} style={{ ...S.cancelBtn, display: "flex", alignItems: "center", gap: 6 }}>
             <FaTimes size={11}/> Dismiss All
           </button>
         )}
@@ -1709,40 +1700,26 @@ function NotificationsPage({ notifications, onDismiss, onDismissAll }) {
             const meta = NOTIF_META[n.type] || NOTIF_META.upcoming;
             return (
               <div key={n.id} style={{
-                background: meta.bg, border: `1px solid ${meta.color}33`,
-                borderLeft: `5px solid ${meta.color}`, borderRadius: 10,
-                padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                background: meta.bg, border: `1px solid ${meta.color}33`, borderLeft: `5px solid ${meta.color}`,
+                borderRadius: 10, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start",
               }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <span style={{ fontSize: 18 }}>{meta.icon}</span>
-                    <span style={{ fontWeight: 700, color: meta.color, fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>
-                      {meta.label}
-                    </span>
+                    <span style={{ fontWeight: 700, color: meta.color, fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>{meta.label}</span>
                   </div>
-                  <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 14, marginBottom: 3 }}>
-                    {n.label}
-                  </div>
+                  <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 14, marginBottom: 3 }}>{n.label}</div>
                   <div style={{ fontSize: 12, color: "#475569" }}>
                     {n.msg}
-                    {n.item?.endDate && (
-                      <span style={{ marginLeft: 10, color: "#94a3b8" }}>
-                        End Date: {fmt(n.item.endDate)}
-                      </span>
-                    )}
+                    {n.item?.endDate && <span style={{ marginLeft: 10, color: "#94a3b8" }}>End Date: {fmt(n.item.endDate)}</span>}
                   </div>
                   <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
                     <span style={{ ...S.deptTag, fontSize: 11 }}>{n.item?.department || "—"}</span>
-                    {n.item?.actionPerson && (
-                      <span style={{ ...S.personTag, fontSize: 11 }}>
-                        <FaUser size={8}/> {n.item.actionPerson}
-                      </span>
-                    )}
+                    {n.item?.actionPerson && <span style={{ ...S.personTag, fontSize: 11 }}><FaUser size={8}/> {n.item.actionPerson}</span>}
                     <StatusBadge status={n.item?.status} />
                   </div>
                 </div>
-                <button onClick={() => onDismiss(n.id)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: meta.color, padding: 4, flexShrink: 0, marginTop: 2 }}>
+                <button onClick={() => onDismiss(n.id)} style={{ background: "none", border: "none", cursor: "pointer", color: meta.color, padding: 4, flexShrink: 0, marginTop: 2 }}>
                   <FaTimes size={13}/>
                 </button>
               </div>
@@ -1755,19 +1732,11 @@ function NotificationsPage({ notifications, onDismiss, onDismissAll }) {
 }
 
 function NotifBanner({ n, onDismiss }) {
-  const colors = {
-    started:  "#1e40af",
-    delayed:  "#991b1b",
-    early:    "#065f46",
-    upcoming: "#92400e",
-  };
-  const icons = { started: "🚀", delayed: "⚠️", early: "🎉", upcoming: "⏰" };
-  const color = colors[n.type] || "#475569";
+  const colors = { started: "#1e40af", delayed: "#991b1b", early: "#065f46", upcoming: "#92400e" };
+  const icons  = { started: "🚀", delayed: "⚠️", early: "🎉", upcoming: "⏰" };
+  const color  = colors[n.type] || "#475569";
   return (
-    <div style={{
-      background: "#fff", border: `1px solid ${color}33`, borderLeft: `4px solid ${color}`,
-      borderRadius: 8, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
-    }}>
+    <div style={{ background: "#fff", border: `1px solid ${color}33`, borderLeft: `4px solid ${color}`, borderRadius: 8, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div style={{ fontSize: 13, color: "#1e293b" }}>
         <span style={{ marginRight: 8 }}>{icons[n.type]}</span>
         <strong>{n.label}</strong>
@@ -1783,55 +1752,64 @@ function NotifBanner({ n, onDismiss }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // DAY OFFSET MODAL CONTENT
 // ═══════════════════════════════════════════════════════════════════════════════
-function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
-  const days       = parseInt(dayInput, 10);
-  const validDays  = !isNaN(days) && days !== 0;
-  const oldDate    = item[field];
-  const newDate    = validDays ? addDaysToDate(oldDate, days) : null;
-  const fieldLabel = field === "startDate" ? "Start Date" : "End Date";
 
-  // Auto end date preview when shifting start
 
-  const duration       = daysBetween(item.startDate, item.endDate);
-  const autoNewEndDate = field === "startDate" && validDays && item.endDate
-    ? addDaysToDate(addDaysToDate(oldDate, days), duration)
-    : null;
+function DayOffsetModalContent({ item, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
+  const days      = parseInt(dayInput, 10);
+  const validDays = !isNaN(days) && days !== 0;
 
-  // Parse linked items from structured format: "targetId:trigger:offsetDays"
+  const newStart = validDays ? addDaysToDate(item.startDate, days) : null;
+  const newEnd   = validDays && item.endDate ? addDaysToDate(item.endDate, days) : null;
+
+  // Find linked items that will cascade
   const linkedEntries = (item.linkedItemIds || "").split(",").filter(Boolean);
-  const linkedIds = linkedEntries.map(e => {
-    const parts = e.split(":");
-    return Number(parts[0]);
-  });
-  const linkedItems = lineItems.filter(i => linkedIds.includes(i.id));
-  const willCascade = validDays && Math.abs(days) >= 2 && linkedItems.length > 0;
+  const linkedIds     = linkedEntries.map(e => Number(e.split(":")[0]));
+  const linkedItems   = lineItems.filter(i => linkedIds.includes(i.id));
+  const willCascade   = validDays && Math.abs(days) >= 2 && linkedItems.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* Item name */}
       <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 15 }}>
         {item.lineItemName}
-        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#64748b" }}>— {fieldLabel}</span>
+        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#64748b" }}>
+          — Shift Both Dates
+        </span>
       </div>
 
-      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
-        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".05em" }}>
-          Current {fieldLabel}
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>
-          {fmt(oldDate) || "Not set"}
-        </div>
-        {field === "startDate" && item.endDate && (
-          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-            Duration: {duration} days → End Date will auto-adjust
+      {/* Current dates */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
+            Current Start Date
           </div>
-        )}
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
+            {fmt(item.startDate) || "Not set"}
+          </div>
+        </div>
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
+            Current End Date
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
+            {fmt(item.endDate) || "Not set"}
+          </div>
+        </div>
       </div>
 
+      {/* Day input */}
       <div>
-        <label style={S.lbl}>Shift by how many days? <span style={{ color: "#ef4444" }}>*</span></label>
+        <label style={S.lbl}>
+          Shift by how many days?
+          <span style={{ color: "#ef4444" }}> *</span>
+          <span style={{ marginLeft: 8, fontSize: 10, color: "#94a3b8", fontWeight: 400 }}>
+            positive = forward · negative = backward
+          </span>
+        </label>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) - 1))}>−1</button>
-          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) - 7))}>−7</button>
+          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) - 7))}>−7</button>
+          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) - 1))}>−1</button>
           <input
             type="number"
             value={dayInput}
@@ -1840,54 +1818,84 @@ function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, 
             style={{ ...S.input, textAlign: "center", fontSize: 18, fontWeight: 700, flex: 1 }}
             autoFocus
           />
-          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) + 1))}>+1</button>
-          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) + 7))}>+7</button>
+          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) + 1))}>+1</button>
+          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) + 7))}>+7</button>
         </div>
       </div>
 
+      {/* Preview */}
       {validDays && (
         <div style={{
           background: days > 0 ? "#fff7ed" : "#f0fdf4",
           border: `1px solid ${days > 0 ? "#fdba74" : "#86efac"}`,
-          borderRadius: 10, padding: 14,
+          borderRadius: 10,
+          padding: 14,
         }}>
-          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".05em" }}>Preview</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 10, textTransform: "uppercase" }}>
+            Preview
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 3 }}>{fieldLabel.toUpperCase()}</div>
-                <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 16, textDecoration: "line-through" }}>{fmt(oldDate)}</span>
-                <span style={{ color: "#94a3b8", margin: "0 8px" }}>→</span>
-                <span style={{ color: "#059669", fontWeight: 800, fontSize: 16 }}>{fmt(newDate)}</span>
-              </div>
+
+            {/* Start date row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>START DATE</span>
+              <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
+                {fmt(item.startDate)}
+              </span>
+              <span style={{ color: "#94a3b8" }}>→</span>
+              <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
+                {fmt(newStart)}
+              </span>
               <span style={{
                 background: days > 0 ? "#fee2e2" : "#d1fae5",
-                color: days > 0 ? "#991b1b" : "#065f46",
-                borderRadius: 8, padding: "6px 14px", fontSize: 14, fontWeight: 800,
+                color:      days > 0 ? "#991b1b" : "#065f46",
+                borderRadius: 20, padding: "2px 10px",
+                fontSize: 11, fontWeight: 800,
               }}>
-                {days > 0 ? `+${days}` : days} days {days > 0 ? "delayed" : "earlier"}
+                {days > 0 ? `+${days}` : days} days
               </span>
             </div>
 
-            {/* Auto end date preview */}
-            {autoNewEndDate && (
-              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#1e40af" }}>
-                🔄 <strong>End Date auto-adjusts:</strong>{" "}
-                <span style={{ textDecoration: "line-through", color: "#ef4444" }}>{fmt(item.endDate)}</span>
-                {" → "}
-                <span style={{ color: "#059669", fontWeight: 700 }}>{fmt(autoNewEndDate)}</span>
-                {" "}(same {duration}-day duration preserved)
+            {/* End date row */}
+            {item.endDate && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>END DATE</span>
+                <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
+                  {fmt(item.endDate)}
+                </span>
+                <span style={{ color: "#94a3b8" }}>→</span>
+                <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
+                  {fmt(newEnd)}
+                </span>
+                <span style={{
+                  background: days > 0 ? "#fee2e2" : "#d1fae5",
+                  color:      days > 0 ? "#991b1b" : "#065f46",
+                  borderRadius: 20, padding: "2px 10px",
+                  fontSize: 11, fontWeight: 800,
+                }}>
+                  {days > 0 ? `+${days}` : days} days
+                </span>
               </div>
             )}
 
+            {/* Duration preserved note */}
+            <div style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", marginTop: 4 }}>
+              ✓ Duration preserved — both dates shift by the same {Math.abs(days)} day{Math.abs(days) !== 1 ? "s" : ""}
+            </div>
+
+            {/* Cascade warning */}
             {willCascade && (
-              <div style={{ padding: "8px 12px", background: "#ede9fe", borderRadius: 8, fontSize: 12, color: "#6d28d9" }}>
+              <div style={{ padding: "8px 12px", background: "#ede9fe", borderRadius: 8, fontSize: 12, color: "#6d28d9", marginTop: 4 }}>
                 <div style={{ fontWeight: 700, marginBottom: 5 }}>
                   <FaLink size={10}/> Linked items will also shift:
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {linkedItems.map(li => (
-                    <span key={li.id} style={{ background: "#ddd6fe", color: "#4c1d95", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
+                    <span key={li.id} style={{
+                      background: "#ddd6fe", color: "#4c1d95",
+                      padding: "3px 10px", borderRadius: 20,
+                      fontSize: 11, fontWeight: 600,
+                    }}>
                       {li.lineItemName}
                     </span>
                   ))}
@@ -1898,8 +1906,11 @@ function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, 
         </div>
       )}
 
+      {/* Reason */}
       <div>
-        <label style={S.lbl}>Reason for Change <span style={{ color: "#ef4444" }}>*</span></label>
+        <label style={S.lbl}>
+          Reason for Change <span style={{ color: "#ef4444" }}>*</span>
+        </label>
         <textarea
           value={dayReason}
           onChange={e => setDayReason(e.target.value)}
@@ -1908,26 +1919,123 @@ function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, 
         />
       </div>
 
+      {/* Actions */}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
         <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
-        <button style={S.saveBtn} onClick={onConfirm} disabled={!validDays || !dayReason.trim()}>
+        <button
+          style={S.saveBtn}
+          onClick={onConfirm}
+          disabled={!validDays || !dayReason.trim()}
+        >
           <FaSave size={11}/> Confirm & Record
         </button>
       </div>
     </div>
   );
 }
+//function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
+//  const days       = parseInt(dayInput, 10);
+//  const validDays  = !isNaN(days) && days !== 0;
+//  const oldDate    = item[field];
+//  const newDate    = validDays ? addDaysToDate(oldDate, days) : null;
+//  const fieldLabel = field === "startDate" ? "Start Date" : "End Date";
+//  const duration   = daysBetween(item.startDate, item.endDate);
+//  const autoNewEndDate = field === "startDate" && validDays && item.endDate
+//    ? addDaysToDate(addDaysToDate(oldDate, days), duration) : null;
+//
+//  const linkedEntries = (item.linkedItemIds || "").split(",").filter(Boolean);
+//  const linkedIds = linkedEntries.map(e => { const parts = e.split(":"); return Number(parts[0]); });
+//  const linkedItems = lineItems.filter(i => linkedIds.includes(i.id));
+//  const willCascade = validDays && Math.abs(days) >= 2 && linkedItems.length > 0;
+//
+//  return (
+//    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+//      <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 15 }}>
+//        {item.lineItemName}
+//        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#64748b" }}>— {fieldLabel}</span>
+//      </div>
+//
+//      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+//        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".05em" }}>Current {fieldLabel}</div>
+//        <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>{fmt(oldDate) || "Not set"}</div>
+//        {field === "startDate" && item.endDate && (
+//          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Duration: {duration} days → End Date will auto-adjust</div>
+//        )}
+//      </div>
+//
+//      <div>
+//        <label style={S.lbl}>Shift by how many days? <span style={{ color: "#ef4444" }}>*</span></label>
+//        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) - 1))}>−1</button>
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) - 7))}>−7</button>
+//          <input type="number" value={dayInput} onChange={e => setDayInput(e.target.value)} placeholder="e.g. +5 or -3"
+//            style={{ ...S.input, textAlign: "center", fontSize: 18, fontWeight: 700, flex: 1 }} autoFocus />
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) + 1))}>+1</button>
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) + 7))}>+7</button>
+//        </div>
+//      </div>
+//
+//      {validDays && (
+//        <div style={{ background: days > 0 ? "#fff7ed" : "#f0fdf4", border: `1px solid ${days > 0 ? "#fdba74" : "#86efac"}`, borderRadius: 10, padding: 14 }}>
+//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".05em" }}>Preview</div>
+//          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+//            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+//              <div>
+//                <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 3 }}>{fieldLabel.toUpperCase()}</div>
+//                <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 16, textDecoration: "line-through" }}>{fmt(oldDate)}</span>
+//                <span style={{ color: "#94a3b8", margin: "0 8px" }}>→</span>
+//                <span style={{ color: "#059669", fontWeight: 800, fontSize: 16 }}>{fmt(newDate)}</span>
+//              </div>
+//              <span style={{ background: days > 0 ? "#fee2e2" : "#d1fae5", color: days > 0 ? "#991b1b" : "#065f46", borderRadius: 8, padding: "6px 14px", fontSize: 14, fontWeight: 800 }}>
+//                {days > 0 ? `+${days}` : days} days {days > 0 ? "delayed" : "earlier"}
+//              </span>
+//            </div>
+//            {autoNewEndDate && (
+//              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#1e40af" }}>
+//                🔄 <strong>End Date auto-adjusts:</strong>{" "}
+//                <span style={{ textDecoration: "line-through", color: "#ef4444" }}>{fmt(item.endDate)}</span>
+//                {" → "}
+//                <span style={{ color: "#059669", fontWeight: 700 }}>{fmt(autoNewEndDate)}</span>
+//                {" "}(same {duration}-day duration preserved)
+//              </div>
+//            )}
+//            {willCascade && (
+//              <div style={{ padding: "8px 12px", background: "#ede9fe", borderRadius: 8, fontSize: 12, color: "#6d28d9" }}>
+//                <div style={{ fontWeight: 700, marginBottom: 5 }}><FaLink size={10}/> Linked items will also shift:</div>
+//                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+//                  {linkedItems.map(li => (
+//                    <span key={li.id} style={{ background: "#ddd6fe", color: "#4c1d95", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{li.lineItemName}</span>
+//                  ))}
+//                </div>
+//              </div>
+//            )}
+//          </div>
+//        </div>
+//      )}
+//
+//      <div>
+//        <label style={S.lbl}>Reason for Change <span style={{ color: "#ef4444" }}>*</span></label>
+//        <textarea value={dayReason} onChange={e => setDayReason(e.target.value)}
+//          placeholder="e.g. Client requested delay, material delivery delayed…"
+//          style={{ ...S.input, height: 80, resize: "vertical" }} />
+//      </div>
+//
+//      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+//        <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
+//        <button style={S.saveBtn} onClick={onConfirm} disabled={!validDays || !dayReason.trim()}>
+//          <FaSave size={11}/> Confirm & Record
+//        </button>
+//      </div>
+//    </div>
+//  );
+//}
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// REVISION PANEL (inline below row)
+// REVISION PANEL
 // ═══════════════════════════════════════════════════════════════════════════════
 function RevisionPanel({ item, revisions }) {
   if (revisions.length === 0) {
-    return (
-      <div style={{ padding: "20px 28px", color: "#94a3b8", fontSize: 13 }}>
-        No change history yet for this line item.
-      </div>
-    );
+    return <div style={{ padding: "20px 28px", color: "#94a3b8", fontSize: 13 }}>No change history yet for this line item.</div>;
   }
 
   const dateRevs  = revisions.filter(h => h.field === "startDate" || h.field === "endDate");
@@ -1949,26 +2057,13 @@ function RevisionPanel({ item, revisions }) {
               return (
                 <div key={i} style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
                   <div style={{ width: 36, display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                    <div style={{
-                      width: 26, height: 26, borderRadius: "50%",
-                      background: isDelay ? "#fee2e2" : "#d1fae5",
-                      color: isDelay ? "#991b1b" : "#065f46",
-                      fontSize: 10, fontWeight: 800,
-                      display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2,
-                    }}>R{i + 1}</div>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: isDelay ? "#fee2e2" : "#d1fae5", color: isDelay ? "#991b1b" : "#065f46", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2 }}>R{i + 1}</div>
                     {i < dateRevs.length - 1 && <div style={{ width: 2, flex: 1, background: "#e2e8f0", margin: "4px 0" }} />}
                   </div>
-                  <div style={{
-                    flex: 1, marginLeft: 10, marginBottom: 12,
-                    background: "#fff", border: "1px solid #e2e8f0",
-                    borderLeft: `3px solid ${isDelay ? "#ef4444" : "#10b981"}`,
-                    borderRadius: "0 8px 8px 0", padding: "10px 14px",
-                  }}>
+                  <div style={{ flex: 1, marginLeft: 10, marginBottom: 12, background: "#fff", border: "1px solid #e2e8f0", borderLeft: `3px solid ${isDelay ? "#ef4444" : "#10b981"}`, borderRadius: "0 8px 8px 0", padding: "10px 14px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}>
                       <div>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>
-                          {FIELD_LABELS[h.field] || h.field}
-                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>{FIELD_LABELS[h.field] || h.field}</span>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
                           <span style={{ color: "#ef4444", fontWeight: 700, fontSize: 13, textDecoration: "line-through" }}>{fmt(h.oldValue)}</span>
                           <span style={{ color: "#94a3b8" }}>→</span>
@@ -2036,11 +2131,7 @@ function DateShiftCell({ value, onShift }) {
         {value ? fmt(value) : <span style={{ color: "#cbd5e1" }}>—</span>}
       </div>
       {value && (
-        <button onClick={onShift} style={{
-          fontSize: 10, padding: "2px 8px", borderRadius: 5, cursor: "pointer",
-          background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8",
-          fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4,
-        }}>
+        <button onClick={onShift} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
           ± Days
         </button>
       )}
@@ -2064,11 +2155,7 @@ function HistoryCard({ h, index }) {
   if (h.field === "status")    accentColor = "#8b5cf6";
 
   return (
-    <div style={{
-      background: "#fff", border: "1px solid #e2e8f0",
-      borderLeft: `4px solid ${accentColor}`, borderRadius: 10, padding: "14px 16px",
-      boxShadow: "0 1px 3px rgba(0,0,0,.03)",
-    }}>
+    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderLeft: `4px solid ${accentColor}`, borderRadius: 10, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,.03)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
@@ -2076,26 +2163,16 @@ function HistoryCard({ h, index }) {
             <span style={{ background: accentColor + "18", color: accentColor, padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
               {isGeneral ? "EDIT" : fieldLabel.toUpperCase()}
             </span>
-            {hasCascade && (
-              <span style={{ background: "#ede9fe", color: "#6d28d9", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700 }}>CASCADE</span>
-            )}
+            {hasCascade && <span style={{ background: "#ede9fe", color: "#6d28d9", padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700 }}>CASCADE</span>}
           </div>
           {!isGeneral && (
             <div style={{ fontSize: 13, color: "#475569", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ color: "#94a3b8" }}>{fieldLabel}:</span>
-              <span style={{ color: "#ef4444", fontWeight: 700, textDecoration: "line-through" }}>
-                {isDateField ? fmt(h.oldValue) : (h.oldValue || "—")}
-              </span>
+              <span style={{ color: "#ef4444", fontWeight: 700, textDecoration: "line-through" }}>{isDateField ? fmt(h.oldValue) : (h.oldValue || "—")}</span>
               <span style={{ color: "#94a3b8" }}>→</span>
-              <span style={{ color: "#059669", fontWeight: 700 }}>
-                {isDateField ? fmt(h.newValue) : (h.newValue || "—")}
-              </span>
+              <span style={{ color: "#059669", fontWeight: 700 }}>{isDateField ? fmt(h.newValue) : (h.newValue || "—")}</span>
               {isDateField && diff !== 0 && (
-                <span style={{
-                  background: diff > 0 ? "#fee2e2" : "#d1fae5",
-                  color: diff > 0 ? "#991b1b" : "#065f46",
-                  padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                }}>
+                <span style={{ background: diff > 0 ? "#fee2e2" : "#d1fae5", color: diff > 0 ? "#991b1b" : "#065f46", padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
                   {diff > 0 ? `+${diff} days delayed` : `${Math.abs(diff)} days earlier`}
                 </span>
               )}
@@ -2163,34 +2240,26 @@ function WorkForm({ initial, projects, selectedProject, onProjectSelect, onSave,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LINE ITEM FORM — with enhanced linking
+// LINE ITEM FORM
 // ═══════════════════════════════════════════════════════════════════════════════
 function LineItemForm({ initial, existingItems, onSave, onCancel }) {
-  // Parse structured linkedItemIds: "targetId:trigger:offsetDays"
   const parseLinks = (raw) => {
     if (!raw) return [];
     if (Array.isArray(raw)) return raw;
     return raw.split(",").filter(Boolean).map(e => {
       const parts = e.split(":");
-      return {
-        targetId:   Number(parts[0]),
-        trigger:    parts[1] || "END_TO_START",
-        offsetDays: Number(parts[2] || 0),
-      };
+      return { targetId: Number(parts[0]), trigger: parts[1] || "END_TO_START", offsetDays: Number(parts[2] || 0) };
     });
   };
 
   const [form, setForm] = useState({
     srNo: "", lineItemName: "", startDate: "", endDate: "",
-    department: "", actionPerson: "", status: "NOT STARTED",
-    remark: "",
+    department: "", actionPerson: "", status: "NOT STARTED", remark: "",
     ...initial,
     linkedItemIds: parseLinks(initial?.linkedItemIds),
   });
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
   const others = existingItems.filter(i => i.id !== form.id);
-
   const isLinked = (id) => form.linkedItemIds.some(l => l.targetId === id);
 
   const toggleLink = (id) => {
@@ -2245,7 +2314,6 @@ function LineItemForm({ initial, existingItems, onSave, onCancel }) {
         <Field label="Remark" value={form.remark} onChange={v => f("remark", v)} placeholder="Optional" />
       </div>
 
-      {/* ── Enhanced Linking Section ── */}
       {others.length > 0 && (
         <div>
           <label style={S.lbl}><FaLink size={9} style={{ marginRight: 4 }}/> Link to Other Line Items</label>
@@ -2256,51 +2324,30 @@ function LineItemForm({ initial, existingItems, onSave, onCancel }) {
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {others.map(i => {
-                const linked = isLinked(i.id);
+                const linked  = isLinked(i.id);
                 const linkDef = form.linkedItemIds.find(l => l.targetId === i.id);
                 return (
-                  <div key={i.id} style={{
-                    border: `1px solid ${linked ? "#a78bfa" : "#e2e8f0"}`,
-                    borderRadius: 8, padding: "10px 12px",
-                    background: linked ? "#faf5ff" : "#fff",
-                    transition: "all .15s",
-                  }}>
+                  <div key={i.id} style={{ border: `1px solid ${linked ? "#a78bfa" : "#e2e8f0"}`, borderRadius: 8, padding: "10px 12px", background: linked ? "#faf5ff" : "#fff", transition: "all .15s" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <input type="checkbox" checked={linked} onChange={() => toggleLink(i.id)} style={{ cursor: "pointer" }} />
                       <div style={{ flex: 1 }}>
                         <span style={{ fontWeight: 600, color: "#1e293b", fontSize: 13 }}>{i.lineItemName}</span>
-                        <span style={{ marginLeft: 8, fontSize: 11, color: "#94a3b8" }}>
-                          {fmt(i.startDate)} → {fmt(i.endDate)}
-                        </span>
+                        <span style={{ marginLeft: 8, fontSize: 11, color: "#94a3b8" }}>{fmt(i.startDate)} → {fmt(i.endDate)}</span>
                       </div>
                       <StatusBadge status={i.status} />
                     </div>
-
                     {linked && linkDef && (
                       <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #e2e8f0", display: "flex", flexDirection: "column", gap: 8 }}>
                         <div>
                           <label style={{ ...S.lbl, marginBottom: 4 }}>Trigger: When should THIS item start?</label>
-                          <select
-                            value={linkDef.trigger}
-                            onChange={e => updateLink(i.id, "trigger", e.target.value)}
-                            style={{ ...S.input, fontSize: 12 }}>
-                            {LINK_TRIGGER_OPTIONS.map(opt => (
-                              <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
+                          <select value={linkDef.trigger} onChange={e => updateLink(i.id, "trigger", e.target.value)} style={{ ...S.input, fontSize: 12 }}>
+                            {LINK_TRIGGER_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                           </select>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <div style={{ flex: 1 }}>
-                            <label style={{ ...S.lbl, marginBottom: 4 }}>
-                              + Offset Days after trigger (optional)
-                            </label>
-                            <input
-                              type="number"
-                              value={linkDef.offsetDays || 0}
-                              onChange={e => updateLink(i.id, "offsetDays", e.target.value)}
-                              placeholder="0"
-                              style={{ ...S.input, fontSize: 12 }}
-                            />
+                            <label style={{ ...S.lbl, marginBottom: 4 }}>+ Offset Days after trigger (optional)</label>
+                            <input type="number" value={linkDef.offsetDays || 0} onChange={e => updateLink(i.id, "offsetDays", e.target.value)} placeholder="0" style={{ ...S.input, fontSize: 12 }} />
                           </div>
                           <div style={{ fontSize: 11, color: "#6d28d9", background: "#ede9fe", padding: "8px 12px", borderRadius: 8, marginTop: 18, whiteSpace: "nowrap" }}>
                             {linkDef.trigger === "END_TO_START"    && `Starts when ${i.lineItemName} ends${linkDef.offsetDays ? ` + ${linkDef.offsetDays}d` : ""}`}
@@ -2338,9 +2385,9 @@ function ProjectCard({ p, onOpen, onHistory }) {
         <span style={{ ...S.pill, background: meta.bg, color: meta.color, flexShrink: 0 }}>{p.projectStatus || "—"}</span>
       </div>
       <div style={S.cardMeta}>
-        {p.clientName      && <span>🏢 {p.clientName}</span>}
-        {p.city            && <span>📍 {p.city}</span>}
-        {p.projectManager  && <span>👤 {p.projectManager}</span>}
+        {p.clientName     && <span>🏢 {p.clientName}</span>}
+        {p.city           && <span>📍 {p.city}</span>}
+        {p.projectManager && <span>👤 {p.projectManager}</span>}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <button style={{ ...S.openBtn, flex: 1 }} onClick={onOpen}>Open Works →</button>
@@ -2370,9 +2417,7 @@ function WorkCard({ w, onOpen, onEdit, onDelete, onHistory }) {
           {fmt(w.startDate)} → {fmt(w.endDate)}
         </div>
       )}
-      {w.description && (
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>{w.description}</div>
-      )}
+      {w.description && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, fontStyle: "italic" }}>{w.description}</div>}
       <button style={{ ...S.openBtn, marginTop: 14, width: "100%" }} onClick={onOpen}>Open Line Items →</button>
     </div>
   );
@@ -2398,8 +2443,7 @@ function Field({ label, value, onChange, type = "text", placeholder = "" }) {
   return (
     <div>
       <label style={S.lbl}>{label}</label>
-      <input type={type} value={value || ""} placeholder={placeholder}
-        onChange={e => onChange(e.target.value)} style={S.input} />
+      <input type={type} value={value || ""} placeholder={placeholder} onChange={e => onChange(e.target.value)} style={S.input} />
     </div>
   );
 }
@@ -2447,9 +2491,7 @@ function PageHeader({ title, subtitle, children }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 21, fontWeight: 700, color: "#1e293b", borderLeft: "4px solid #10b981", paddingLeft: 12 }}>
-          {title}
-        </h2>
+        <h2 style={{ margin: 0, fontSize: 21, fontWeight: 700, color: "#1e293b", borderLeft: "4px solid #10b981", paddingLeft: 12 }}>{title}</h2>
         {subtitle && <p style={{ margin: "4px 0 0 16px", fontSize: 12, color: "#94a3b8" }}>{subtitle}</p>}
       </div>
       {children && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{children}</div>}
@@ -2588,21 +2630,7 @@ const S = {
   viewAllBtn:  { background: "none", border: "1px dashed #e2e8f0", borderRadius: 8, padding: "8px 16px", cursor: "pointer", color: "#64748b", fontSize: 12, textAlign: "center" },
 };
 
-// Revisions page table styles
 const RS = {
-  fixedColHead: {
-    position: "sticky", left: 0, zIndex: 2,
-    background: "#0f172a", color: "#fff",
-    padding: "12px 16px", textAlign: "left",
-    fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
-    borderRight: "2px solid #334155", minWidth: 130,
-  },
-  colHead: {
-    background: "#1e293b", color: "#e2e8f0",
-    padding: "12px 14px", textAlign: "center",
-    borderLeft: "2px solid #334155", borderBottom: "1px solid #334155",
-    minWidth: 160,
-  },
   revHead: {
     background: "#f8fafc", color: "#64748b",
     padding: "6px 12px", textAlign: "center",
