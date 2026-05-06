@@ -139,27 +139,37 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
   summaryWs["!cols"] = [{ wch: 20 }, { wch: 50 }];
   XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
 
-  // ── Pivot / Matrix sheet ───────────────────────────────────────────────────
+  // ── Only include line items the user checked ───────────────────────────────
   const filteredItems = Object.entries(byItem)
     .filter(([name]) => selectedItems.includes(name));
 
-  const rows    = [];
-  const merges  = [];
+  // ── Which data rows to show in the visual sheet (respects selectedFields) ──
+  const ALL_DATA_ROW_DEFS = [
+    { key: "whatChanged", label: "WHAT CHANGED", render: h => FIELD_LABELS[h.field] || h.field || "—" },
+    { key: "from",        label: "FROM",         render: h => h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—") },
+    { key: "to",          label: "TO",           render: h => h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—") },
+    { key: "reason",      label: "REASON",       render: h => h.reason || "—" },
+    { key: "changedBy",   label: "CHANGED BY",   render: h => h.changedBy || "System" },
+    { key: "changedAt",   label: "CHANGED AT",   render: h => fmtDateTime(h.changedAt) },
+  ];
 
+  const activeDataRowDefs = (selectedFields && selectedFields.length > 0)
+    ? ALL_DATA_ROW_DEFS.filter(def => selectedFields.includes(def.key))
+    : ALL_DATA_ROW_DEFS;
+
+  // ── Pivot / Matrix sheet ───────────────────────────────────────────────────
+  const rows   = [];
+  const merges = [];
   let currentRow = 0;
 
-  // ── Report header (rows 0-1) ───────────────────────────────────────────────
   rows.push(["CHANGE HISTORY REPORT"]);
   rows.push([
-    `Project: ${projectName || "—"}`,
-    "",
-    `Work: ${workName || "—"}`,
-    "",
-    `Downloaded: ${fmtDateTime(new Date().toISOString())}`,
-    "",
+    `Project: ${projectName || "—"}`, "",
+    `Work: ${workName || "—"}`, "",
+    `Downloaded: ${fmtDateTime(new Date().toISOString())}`, "",
     `Total Changes: ${history.filter(h => selectedItems.includes(h.lineItemName || "Unknown")).length}`,
   ]);
-  rows.push([]); // blank
+  rows.push([]);
   currentRow = 3;
 
   filteredItems.forEach(([itemName, changes]) => {
@@ -183,17 +193,8 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
     rows.push(revHeaderRow);
     currentRow++;
 
-    // Data rows
-    const dataRowDefs = [
-      { label: "WHAT CHANGED", render: h => FIELD_LABELS[h.field] || h.field || "—" },
-      { label: "FROM",         render: h => h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—") },
-      { label: "TO",           render: h => h.field?.includes("Date") ? fmt(h.newValue) : (h.newValue || "—") },
-      { label: "REASON",       render: h => h.reason || "—" },
-      { label: "CHANGED BY",   render: h => h.changedBy || "System" },
-      { label: "CHANGED AT",   render: h => fmtDateTime(h.changedAt) },
-    ];
-
-    dataRowDefs.forEach(({ label, render }) => {
+    // Only render checked data rows
+    activeDataRowDefs.forEach(({ label, render }) => {
       const row = [label];
       changes.forEach(h => row.push(render(h)));
       rows.push(row);
@@ -229,32 +230,29 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
     }
   }
 
-  // ── Style: Per line item blocks ────────────────────────────────────────────
-  // Row label colors for the 6 data rows
-  const ROW_LABEL_COLORS = [
-    { bg: "EFF6FF", text: "1E40AF" }, // WHAT CHANGED — blue
-    { bg: "FEF2F2", text: "991B1B" }, // FROM         — red
-    { bg: "F0FDF4", text: "065F46" }, // TO           — green
-    { bg: "FFFBEB", text: "92400E" }, // REASON       — amber
-    { bg: "F5F3FF", text: "5B21B6" }, // CHANGED BY   — violet
-    { bg: "F8FAFC", text: "334155" }, // CHANGED AT   — slate
-  ];
-
-  // Row background for value cells (same color family, lighter)
-  const ROW_VALUE_BG = [
-    "F8FAFC", // WHAT CHANGED
-    "FEF2F2", // FROM
-    "F0FDF4", // TO
-    "FFFBEB", // REASON
-    "FAFAFA", // CHANGED BY
-    "FFFFFF", // CHANGED AT
-  ];
+  // ── Style color maps keyed by field key ────────────────────────────────────
+  const ALL_ROW_LABEL_COLORS = {
+    whatChanged: { bg: "EFF6FF", text: "1E40AF" },
+    from:        { bg: "FEF2F2", text: "991B1B" },
+    to:          { bg: "F0FDF4", text: "065F46" },
+    reason:      { bg: "FFFBEB", text: "92400E" },
+    changedBy:   { bg: "F5F3FF", text: "5B21B6" },
+    changedAt:   { bg: "F8FAFC", text: "334155" },
+  };
+  const ALL_ROW_VALUE_BG = {
+    whatChanged: "F8FAFC",
+    from:        "FEF2F2",
+    to:          "F0FDF4",
+    reason:      "FFFBEB",
+    changedBy:   "FAFAFA",
+    changedAt:   "FFFFFF",
+  };
 
   let r = 3;
   filteredItems.forEach(([itemName, changes]) => {
     const totalCols = 1 + changes.length;
 
-    // ── LINE ITEM header: dark navy, white bold text ────────────────────────
+    // ── LINE ITEM header ───────────────────────────────────────────────────
     for (let c = 0; c < totalCols; c++) {
       const cell = XLSX.utils.encode_cell({ r, c });
       if (!ws[cell]) ws[cell] = { v: c === 0 ? `LINE ITEM: ${itemName}` : "", t: "s" };
@@ -262,13 +260,12 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
         font:      { bold: true, sz: 11, color: { rgb: "FFFFFF" }, name: "Arial" },
         fill:      { fgColor: { rgb: "0F172A" } },
         alignment: { horizontal: "left", vertical: "center", wrapText: false },
-        border:    { bottom: { style: "medium", color: { rgb: "10B981" } } }, // emerald bottom line
+        border:    { bottom: { style: "medium", color: { rgb: "10B981" } } },
       };
     }
     r++;
 
     // ── REV header row ─────────────────────────────────────────────────────
-    // Col 0: "FIELD" label — dark slate
     const fieldLabelCell = XLSX.utils.encode_cell({ r, c: 0 });
     if (ws[fieldLabelCell]) {
       ws[fieldLabelCell].s = {
@@ -279,49 +276,39 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
       };
     }
 
-    // Col 1+: REV columns — color by delay/early/neutral
     for (let c = 1; c < totalCols; c++) {
       const cell = XLSX.utils.encode_cell({ r, c });
       if (ws[cell]) {
-        const h      = changes[c - 1];
-        const isDate = h?.field?.includes("Date");
-        const diff   = isDate ? daysBetween(h.oldValue, h.newValue) : 0;
-
-        const bgColor  = diff > 0 ? "FEE2E2"  // red tint   = delayed
-                       : diff < 0 ? "D1FAE5"  // green tint = early
-                       :            "E2E8F0";  // neutral    = no date shift
-
-        const txtColor = diff > 0 ? "991B1B"
-                       : diff < 0 ? "065F46"
-                       :            "1E293B";
-
-        const borderColor = diff > 0 ? "EF4444"
-                          : diff < 0 ? "10B981"
-                          :            "94A3B8";
-
+        const h           = changes[c - 1];
+        const isDate      = h?.field?.includes("Date");
+        const diff        = isDate ? daysBetween(h.oldValue, h.newValue) : 0;
+        const bgColor     = diff > 0 ? "FEE2E2" : diff < 0 ? "D1FAE5" : "E2E8F0";
+        const txtColor    = diff > 0 ? "991B1B" : diff < 0 ? "065F46" : "1E293B";
+        const borderColor = diff > 0 ? "EF4444" : diff < 0 ? "10B981" : "94A3B8";
         ws[cell].s = {
           font:      { bold: true, sz: 10, color: { rgb: txtColor }, name: "Arial" },
           fill:      { fgColor: { rgb: bgColor } },
           alignment: { horizontal: "center", vertical: "center", wrapText: false },
           border: {
             bottom: { style: "medium", color: { rgb: borderColor } },
-            right:  { style: "thin",   color: { rgb: "CBD5E1"    } },
+            right:  { style: "thin",   color: { rgb: "CBD5E1" } },
           },
         };
       }
     }
     r++;
 
-    // ── Data rows: 6 rows ──────────────────────────────────────────────────
-    for (let dr = 0; dr < 6; dr++) {
-      const { bg: labelBg, text: labelText } = ROW_LABEL_COLORS[dr];
-      const valueBg = ROW_VALUE_BG[dr];
+    // ── Data rows — only active ones ───────────────────────────────────────
+    activeDataRowDefs.forEach(({ key }) => {
+      const { bg: labelBg, text: labelText } = ALL_ROW_LABEL_COLORS[key];
+      const valueBg = ALL_ROW_VALUE_BG[key];
+      const isFrom  = key === "from";
+      const isTo    = key === "to";
 
       for (let c = 0; c < totalCols; c++) {
         const cell = XLSX.utils.encode_cell({ r, c });
         if (ws[cell]) {
           if (c === 0) {
-            // Label column — colored background per row type
             ws[cell].s = {
               font:      { bold: true, sz: 9, color: { rgb: labelText }, name: "Arial" },
               fill:      { fgColor: { rgb: labelBg } },
@@ -332,14 +319,10 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
               },
             };
           } else {
-            // Value column — light tinted background matching the row type
-            const isFrom = dr === 1;
-            const isTo   = dr === 2;
             const isDate = changes[c - 1]?.field?.includes("Date");
             let txtColor = "334155";
-            if (isFrom && isDate) txtColor = "DC2626"; // red for old date
-            if (isTo   && isDate) txtColor = "059669"; // green for new date
-
+            if (isFrom && isDate) txtColor = "DC2626";
+            if (isTo   && isDate) txtColor = "059669";
             ws[cell].s = {
               font:      { sz: 10, color: { rgb: txtColor }, name: "Arial", bold: (isFrom || isTo) && isDate },
               fill:      { fgColor: { rgb: valueBg } },
@@ -353,26 +336,19 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
         }
       }
       r++;
-    }
+    });
 
-    // blank separator row
-    r++;
+    r++; // blank separator
   });
 
   // ── Column widths ──────────────────────────────────────────────────────────
   const maxRevs = Math.max(...filteredItems.map(([, changes]) => changes.length), 0);
-  ws["!cols"] = [
-    { wch: 16 },
-    ...Array(maxRevs).fill({ wch: 22 }),
-  ];
+  ws["!cols"] = [{ wch: 16 }, ...Array(maxRevs).fill({ wch: 22 })];
 
   // ── Row heights ────────────────────────────────────────────────────────────
-  ws["!rows"] = rows.map((_, i) => {
-    if (i === 0) return { hpt: 24 };
-    return { hpt: 18 };
-  });
+  ws["!rows"] = rows.map((_, i) => ({ hpt: i === 0 ? 24 : 18 }));
 
-  // Freeze first column
+  // ── Freeze first column ────────────────────────────────────────────────────
   ws["!freeze"] = { xSplit: 1, ySplit: 3 };
 
   XLSX.utils.book_append_sheet(wb, ws, sheetLabel || "Change History");
@@ -381,7 +357,6 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
   const filename = `${safe(projectName)}_${safe(workName)}_revisions.xlsx`;
   XLSX.writeFile(wb, filename);
 }
-
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DOWNLOAD SELECTION MODAL
@@ -772,11 +747,18 @@ export default function PlanningDashboard({ onBack }) {
 //    setDayReason("");
 //  };
 
-const openDayModal = (item) => {
-  setDayModal({ item });   // removed "field" — we always shift both dates now
+//const openDayModal = (item) => {
+//  setDayModal({ item });   // removed "field" — we always shift both dates now
+//  setDayInput("");
+//  setDayReason("");
+//};
+
+const openDayModal = (item, field) => {
+  setDayModal({ item, field });
   setDayInput("");
   setDayReason("");
 };
+
 
 
 const confirmDayChange = async () => {
@@ -790,45 +772,69 @@ const confirmDayChange = async () => {
     return;
   }
 
-  const { item } = dayModal;
+  const { item, field } = dayModal;
+  const isStartDate = field === "startDate";
 
-  if (!item.startDate) {
-    showToast("Start date is missing — edit the item first", "error");
+  if (!item[field]) {
+    showToast("Date is missing — edit the item first", "error");
     return;
   }
 
-  const oldStart = item.startDate;
-  const oldEnd   = item.endDate;
-  const newStart = addDaysToDate(oldStart, days);
-  const newEnd   = oldEnd ? addDaysToDate(oldEnd, days) : null;
-
   try {
-    // ── Shift Start Date ───────────────────────────────────────────────────
-    await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
-      field:     "startDate",
-      oldValue:  oldStart,
-      newValue:  newStart,
-      reason:    dayReason,
-      cascade:   Math.abs(days) >= 2,
-      changedBy: "User",
-    });
+    if (isStartDate) {
+      // ── START DATE changed ────────────────────────────────────────────────
+      const oldStart = item.startDate;
+      const oldEnd   = item.endDate;
+      const newStart = addDaysToDate(oldStart, days);
+      const newEnd   = oldEnd ? addDaysToDate(oldEnd, days) : null;
 
-    // ── Shift End Date (same number of days) ───────────────────────────────
-    if (oldEnd && newEnd) {
-      await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+      // Shift startDate — this cascades to linked items
+      const res = await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+        field:     "startDate",
+        oldValue:  oldStart,
+        newValue:  newStart,
+        reason:    dayReason,
+        cascade:   Math.abs(days) >= 2,
+        changedBy: "User",
+      });
+
+      // Shift endDate by same amount — no cascade (already done via startDate)
+      if (oldEnd && newEnd) {
+        await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+          field:     "endDate",
+          oldValue:  oldEnd,
+          newValue:  newEnd,
+          reason:    `Auto-adjusted with Start Date — ${dayReason}`,
+          cascade:   false,
+          changedBy: "System (auto)",
+        });
+      }
+
+      const cascaded = res.data?.cascadedItems || [];
+      let msg = `Start & End shifted ${days > 0 ? "+" : ""}${days} days ✓`;
+      if (cascaded.length > 0) msg += ` · Also shifted: ${cascaded.join(", ")}`;
+      showToast(msg);
+
+    } else {
+      // ── END DATE changed ──────────────────────────────────────────────────
+      // startDate stays completely fixed
+      const oldEnd = item.endDate;
+      const newEnd = addDaysToDate(oldEnd, days);
+
+      const res = await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
         field:     "endDate",
         oldValue:  oldEnd,
         newValue:  newEnd,
-        reason:    `Auto-adjusted with Start Date — ${dayReason}`,
+        reason:    dayReason,
         cascade:   Math.abs(days) >= 2,
-        changedBy: "System (auto)",
+        changedBy: "User",
       });
-    }
 
-    // ── Build toast message ────────────────────────────────────────────────
-    const direction = days > 0 ? "forward" : "backward";
-    let msg = `Both dates shifted ${days > 0 ? "+" : ""}${days} days ${direction} ✓`;
-    showToast(msg);
+      const cascaded = res.data?.cascadedItems || [];
+      let msg = `End Date shifted ${days > 0 ? "+" : ""}${days} days ✓`;
+      if (cascaded.length > 0) msg += ` · Also shifted: ${cascaded.join(", ")}`;
+      showToast(msg);
+    }
 
     setDayModal(null);
     setDayInput("");
@@ -838,9 +844,74 @@ const confirmDayChange = async () => {
     loadLineItems(selWork.id);
 
   } catch {
-    showToast("Failed to update dates", "error");
+    showToast("Failed to update date", "error");
   }
 };
+
+
+
+//const confirmDayChange = async () => {
+//  const days = parseInt(dayInput, 10);
+//  if (isNaN(days) || days === 0) {
+//    showToast("Enter a valid number of days (non-zero)", "error");
+//    return;
+//  }
+//  if (!dayReason.trim()) {
+//    showToast("Please enter a reason", "error");
+//    return;
+//  }
+//
+//  const { item } = dayModal;
+//
+//  if (!item.startDate) {
+//    showToast("Start date is missing — edit the item first", "error");
+//    return;
+//  }
+//
+//  const oldStart = item.startDate;
+//  const oldEnd   = item.endDate;
+//  const newStart = addDaysToDate(oldStart, days);
+//  const newEnd   = oldEnd ? addDaysToDate(oldEnd, days) : null;
+//
+//  try {
+//    // ── Shift Start Date ───────────────────────────────────────────────────
+//    await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+//      field:     "startDate",
+//      oldValue:  oldStart,
+//      newValue:  newStart,
+//      reason:    dayReason,
+//      cascade:   Math.abs(days) >= 2,
+//      changedBy: "User",
+//    });
+//
+//    // ── Shift End Date (same number of days) ───────────────────────────────
+//    if (oldEnd && newEnd) {
+//      await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
+//        field:     "endDate",
+//        oldValue:  oldEnd,
+//        newValue:  newEnd,
+//        reason:    `Auto-adjusted with Start Date — ${dayReason}`,
+//        cascade:   Math.abs(days) >= 2,
+//        changedBy: "System (auto)",
+//      });
+//    }
+//
+//    // ── Build toast message ────────────────────────────────────────────────
+//    const direction = days > 0 ? "forward" : "backward";
+//    let msg = `Both dates shifted ${days > 0 ? "+" : ""}${days} days ${direction} ✓`;
+//    showToast(msg);
+//
+//    setDayModal(null);
+//    setDayInput("");
+//    setDayReason("");
+//    setItemRevisions({});
+//    setExpandedItem(null);
+//    loadLineItems(selWork.id);
+//
+//  } catch {
+//    showToast("Failed to update dates", "error");
+//  }
+//};
 //  const confirmDayChange = async () => {
 //    const days = parseInt(dayInput, 10);
 //    if (isNaN(days) || days === 0) { showToast("Enter a valid number of days (non-zero)", "error"); return; }
@@ -1754,56 +1825,94 @@ function NotifBanner({ n, onDismiss }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 
-function DayOffsetModalContent({ item, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
-  const days      = parseInt(dayInput, 10);
-  const validDays = !isNaN(days) && days !== 0;
+function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
+  const days        = parseInt(dayInput, 10);
+  const validDays   = !isNaN(days) && days !== 0;
+  const isStartDate = field === "startDate";
+  const duration    = daysBetween(item.startDate, item.endDate);
 
-  const newStart = validDays ? addDaysToDate(item.startDate, days) : null;
-  const newEnd   = validDays && item.endDate ? addDaysToDate(item.endDate, days) : null;
+  const previewStart = isStartDate && validDays ? addDaysToDate(item.startDate, days) : null;
+  const previewEnd   = validDays
+    ? isStartDate
+      ? item.endDate ? addDaysToDate(item.endDate, days) : null
+      : addDaysToDate(item.endDate, days)
+    : null;
 
-  // Find linked items that will cascade
   const linkedEntries = (item.linkedItemIds || "").split(",").filter(Boolean);
   const linkedIds     = linkedEntries.map(e => Number(e.split(":")[0]));
   const linkedItems   = lineItems.filter(i => linkedIds.includes(i.id));
   const willCascade   = validDays && Math.abs(days) >= 2 && linkedItems.length > 0;
 
+  const badge = (n) => (
+    <span style={{
+      background: n > 0 ? "#fee2e2" : "#d1fae5",
+      color:      n > 0 ? "#991b1b" : "#065f46",
+      borderRadius: 20, padding: "2px 10px",
+      fontSize: 11, fontWeight: 800,
+    }}>
+      {n > 0 ? `+${n}` : n}d
+    </span>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* Item name */}
       <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 15 }}>
         {item.lineItemName}
         <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#64748b" }}>
-          — Shift Both Dates
+          — Shift {isStartDate ? "Start Date" : "End Date"}
         </span>
       </div>
 
-      {/* Current dates */}
+      {/* Current date cards */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
-            Current Start Date
+        <div style={{
+          background: isStartDate ? "#eff6ff" : "#f8fafc",
+          border: `2px solid ${isStartDate ? "#93c5fd" : "#e2e8f0"}`,
+          borderRadius: 10, padding: 14,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: isStartDate ? "#1d4ed8" : "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>
+            Start Date — {isStartDate ? "✏️ changing" : "🔒 stays fixed"}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
-            {fmt(item.startDate) || "Not set"}
+          <div style={{ fontSize: 17, fontWeight: 800, color: isStartDate ? "#1e40af" : "#94a3b8" }}>
+            {fmt(item.startDate) || "—"}
           </div>
+          {isStartDate && (
+            <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>
+              End date auto-adjusts ({duration}d duration kept)
+            </div>
+          )}
+          {!isStartDate && (
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4, fontStyle: "italic" }}>
+              will not change
+            </div>
+          )}
         </div>
-        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
-            Current End Date
+
+        <div style={{
+          background: "#eff6ff",
+          border: "2px solid #93c5fd",
+          borderRadius: 10, padding: 14,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase", marginBottom: 6 }}>
+            End Date — ✏️ {isStartDate ? "auto-adjusts" : "changing"}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
-            {fmt(item.endDate) || "Not set"}
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#1e40af" }}>
+            {fmt(item.endDate) || "—"}
           </div>
+          {isStartDate && (
+            <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>
+              shifts same days as start
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Day input */}
+      {/* Input */}
       <div>
         <label style={S.lbl}>
-          Shift by how many days?
-          <span style={{ color: "#ef4444" }}> *</span>
-          <span style={{ marginLeft: 8, fontSize: 10, color: "#94a3b8", fontWeight: 400 }}>
+          Shift by how many days? <span style={{ color: "#ef4444" }}>*</span>
+          <span style={{ marginLeft: 8, fontSize: 10, color: "#94a3b8", fontWeight: 400, textTransform: "none" }}>
             positive = forward · negative = backward
           </span>
         </label>
@@ -1828,74 +1937,49 @@ function DayOffsetModalContent({ item, dayInput, setDayInput, dayReason, setDayR
         <div style={{
           background: days > 0 ? "#fff7ed" : "#f0fdf4",
           border: `1px solid ${days > 0 ? "#fdba74" : "#86efac"}`,
-          borderRadius: 10,
-          padding: 14,
+          borderRadius: 10, padding: 14,
         }}>
-          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 10, textTransform: "uppercase" }}>
+          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 12, textTransform: "uppercase" }}>
             Preview
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-            {/* Start date row */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>START DATE</span>
-              <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
-                {fmt(item.startDate)}
-              </span>
+            {/* Start row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 90, flexShrink: 0 }}>START DATE</span>
+              {isStartDate ? (
+                <>
+                  <span style={{ color: "#ef4444", fontWeight: 700, fontSize: 13, textDecoration: "line-through" }}>{fmt(item.startDate)}</span>
+                  <span style={{ color: "#94a3b8" }}>→</span>
+                  <span style={{ color: "#059669", fontWeight: 700, fontSize: 13 }}>{fmt(previewStart)}</span>
+                  {badge(days)}
+                </>
+              ) : (
+                <span style={{ color: "#94a3b8", fontSize: 12, fontStyle: "italic" }}>
+                  {fmt(item.startDate)} — no change
+                </span>
+              )}
+            </div>
+
+            {/* End row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 90, flexShrink: 0 }}>END DATE</span>
+              <span style={{ color: "#ef4444", fontWeight: 700, fontSize: 13, textDecoration: "line-through" }}>{fmt(item.endDate)}</span>
               <span style={{ color: "#94a3b8" }}>→</span>
-              <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
-                {fmt(newStart)}
-              </span>
-              <span style={{
-                background: days > 0 ? "#fee2e2" : "#d1fae5",
-                color:      days > 0 ? "#991b1b" : "#065f46",
-                borderRadius: 20, padding: "2px 10px",
-                fontSize: 11, fontWeight: 800,
-              }}>
-                {days > 0 ? `+${days}` : days} days
-              </span>
+              <span style={{ color: "#059669", fontWeight: 700, fontSize: 13 }}>{fmt(previewEnd)}</span>
+              {badge(days)}
+              {isStartDate && (
+                <span style={{ fontSize: 10, color: "#64748b", fontStyle: "italic" }}>auto ({duration}d kept)</span>
+              )}
             </div>
 
-            {/* End date row */}
-            {item.endDate && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>END DATE</span>
-                <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
-                  {fmt(item.endDate)}
-                </span>
-                <span style={{ color: "#94a3b8" }}>→</span>
-                <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
-                  {fmt(newEnd)}
-                </span>
-                <span style={{
-                  background: days > 0 ? "#fee2e2" : "#d1fae5",
-                  color:      days > 0 ? "#991b1b" : "#065f46",
-                  borderRadius: 20, padding: "2px 10px",
-                  fontSize: 11, fontWeight: 800,
-                }}>
-                  {days > 0 ? `+${days}` : days} days
-                </span>
-              </div>
-            )}
-
-            {/* Duration preserved note */}
-            <div style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", marginTop: 4 }}>
-              ✓ Duration preserved — both dates shift by the same {Math.abs(days)} day{Math.abs(days) !== 1 ? "s" : ""}
-            </div>
-
-            {/* Cascade warning */}
+            {/* Cascade */}
             {willCascade && (
               <div style={{ padding: "8px 12px", background: "#ede9fe", borderRadius: 8, fontSize: 12, color: "#6d28d9", marginTop: 4 }}>
-                <div style={{ fontWeight: 700, marginBottom: 5 }}>
-                  <FaLink size={10}/> Linked items will also shift:
-                </div>
+                <div style={{ fontWeight: 700, marginBottom: 5 }}><FaLink size={10}/> Linked items will also shift:</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {linkedItems.map(li => (
-                    <span key={li.id} style={{
-                      background: "#ddd6fe", color: "#4c1d95",
-                      padding: "3px 10px", borderRadius: 20,
-                      fontSize: 11, fontWeight: 600,
-                    }}>
+                    <span key={li.id} style={{ background: "#ddd6fe", color: "#4c1d95", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
                       {li.lineItemName}
                     </span>
                   ))}
@@ -1908,9 +1992,7 @@ function DayOffsetModalContent({ item, dayInput, setDayInput, dayReason, setDayR
 
       {/* Reason */}
       <div>
-        <label style={S.lbl}>
-          Reason for Change <span style={{ color: "#ef4444" }}>*</span>
-        </label>
+        <label style={S.lbl}>Reason for Change <span style={{ color: "#ef4444" }}>*</span></label>
         <textarea
           value={dayReason}
           onChange={e => setDayReason(e.target.value)}
@@ -1919,20 +2001,198 @@ function DayOffsetModalContent({ item, dayInput, setDayInput, dayReason, setDayR
         />
       </div>
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
         <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
-        <button
-          style={S.saveBtn}
-          onClick={onConfirm}
-          disabled={!validDays || !dayReason.trim()}
-        >
+        <button style={S.saveBtn} onClick={onConfirm} disabled={!validDays || !dayReason.trim()}>
           <FaSave size={11}/> Confirm & Record
         </button>
       </div>
     </div>
   );
 }
+
+
+
+//
+//function DayOffsetModalContent({ item, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
+//  const days      = parseInt(dayInput, 10);
+//  const validDays = !isNaN(days) && days !== 0;
+//
+//  const newStart = validDays ? addDaysToDate(item.startDate, days) : null;
+//  const newEnd   = validDays && item.endDate ? addDaysToDate(item.endDate, days) : null;
+//
+//  // Find linked items that will cascade
+//  const linkedEntries = (item.linkedItemIds || "").split(",").filter(Boolean);
+//  const linkedIds     = linkedEntries.map(e => Number(e.split(":")[0]));
+//  const linkedItems   = lineItems.filter(i => linkedIds.includes(i.id));
+//  const willCascade   = validDays && Math.abs(days) >= 2 && linkedItems.length > 0;
+//
+//  return (
+//    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+//
+//      {/* Item name */}
+//      <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 15 }}>
+//        {item.lineItemName}
+//        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#64748b" }}>
+//          — Shift Both Dates
+//        </span>
+//      </div>
+//
+//      {/* Current dates */}
+//      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+//        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
+//            Current Start Date
+//          </div>
+//          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
+//            {fmt(item.startDate) || "Not set"}
+//          </div>
+//        </div>
+//        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
+//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
+//            Current End Date
+//          </div>
+//          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
+//            {fmt(item.endDate) || "Not set"}
+//          </div>
+//        </div>
+//      </div>
+//
+//      {/* Day input */}
+//      <div>
+//        <label style={S.lbl}>
+//          Shift by how many days?
+//          <span style={{ color: "#ef4444" }}> *</span>
+//          <span style={{ marginLeft: 8, fontSize: 10, color: "#94a3b8", fontWeight: 400 }}>
+//            positive = forward · negative = backward
+//          </span>
+//        </label>
+//        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) - 7))}>−7</button>
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) - 1))}>−1</button>
+//          <input
+//            type="number"
+//            value={dayInput}
+//            onChange={e => setDayInput(e.target.value)}
+//            placeholder="e.g. +5 or -3"
+//            style={{ ...S.input, textAlign: "center", fontSize: 18, fontWeight: 700, flex: 1 }}
+//            autoFocus
+//          />
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) + 1))}>+1</button>
+//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) + 7))}>+7</button>
+//        </div>
+//      </div>
+//
+//      {/* Preview */}
+//      {validDays && (
+//        <div style={{
+//          background: days > 0 ? "#fff7ed" : "#f0fdf4",
+//          border: `1px solid ${days > 0 ? "#fdba74" : "#86efac"}`,
+//          borderRadius: 10,
+//          padding: 14,
+//        }}>
+//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 10, textTransform: "uppercase" }}>
+//            Preview
+//          </div>
+//          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+//
+//            {/* Start date row */}
+//            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+//              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>START DATE</span>
+//              <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
+//                {fmt(item.startDate)}
+//              </span>
+//              <span style={{ color: "#94a3b8" }}>→</span>
+//              <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
+//                {fmt(newStart)}
+//              </span>
+//              <span style={{
+//                background: days > 0 ? "#fee2e2" : "#d1fae5",
+//                color:      days > 0 ? "#991b1b" : "#065f46",
+//                borderRadius: 20, padding: "2px 10px",
+//                fontSize: 11, fontWeight: 800,
+//              }}>
+//                {days > 0 ? `+${days}` : days} days
+//              </span>
+//            </div>
+//
+//            {/* End date row */}
+//            {item.endDate && (
+//              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+//                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>END DATE</span>
+//                <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
+//                  {fmt(item.endDate)}
+//                </span>
+//                <span style={{ color: "#94a3b8" }}>→</span>
+//                <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
+//                  {fmt(newEnd)}
+//                </span>
+//                <span style={{
+//                  background: days > 0 ? "#fee2e2" : "#d1fae5",
+//                  color:      days > 0 ? "#991b1b" : "#065f46",
+//                  borderRadius: 20, padding: "2px 10px",
+//                  fontSize: 11, fontWeight: 800,
+//                }}>
+//                  {days > 0 ? `+${days}` : days} days
+//                </span>
+//              </div>
+//            )}
+//
+//            {/* Duration preserved note */}
+//            <div style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", marginTop: 4 }}>
+//              ✓ Duration preserved — both dates shift by the same {Math.abs(days)} day{Math.abs(days) !== 1 ? "s" : ""}
+//            </div>
+//
+//            {/* Cascade warning */}
+//            {willCascade && (
+//              <div style={{ padding: "8px 12px", background: "#ede9fe", borderRadius: 8, fontSize: 12, color: "#6d28d9", marginTop: 4 }}>
+//                <div style={{ fontWeight: 700, marginBottom: 5 }}>
+//                  <FaLink size={10}/> Linked items will also shift:
+//                </div>
+//                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+//                  {linkedItems.map(li => (
+//                    <span key={li.id} style={{
+//                      background: "#ddd6fe", color: "#4c1d95",
+//                      padding: "3px 10px", borderRadius: 20,
+//                      fontSize: 11, fontWeight: 600,
+//                    }}>
+//                      {li.lineItemName}
+//                    </span>
+//                  ))}
+//                </div>
+//              </div>
+//            )}
+//          </div>
+//        </div>
+//      )}
+//
+//      {/* Reason */}
+//      <div>
+//        <label style={S.lbl}>
+//          Reason for Change <span style={{ color: "#ef4444" }}>*</span>
+//        </label>
+//        <textarea
+//          value={dayReason}
+//          onChange={e => setDayReason(e.target.value)}
+//          placeholder="e.g. Client requested delay, material delivery delayed…"
+//          style={{ ...S.input, height: 80, resize: "vertical" }}
+//        />
+//      </div>
+//
+//      {/* Actions */}
+//      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+//        <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
+//        <button
+//          style={S.saveBtn}
+//          onClick={onConfirm}
+//          disabled={!validDays || !dayReason.trim()}
+//        >
+//          <FaSave size={11}/> Confirm & Record
+//        </button>
+//      </div>
+//    </div>
+//  );
+//}
 //function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
 //  const days       = parseInt(dayInput, 10);
 //  const validDays  = !isNaN(days) && days !== 0;
