@@ -143,32 +143,13 @@ public class PlanningController {
         return ResponseEntity.ok(historyService.getHistoryByWork(workId));
     }
 
-    /**
-     * GET /api/planning/projects/{projectId}/history
-     * All change history across all works in a project, newest first.
-     */
+
     @GetMapping("/projects/{projectId}/history")
     public ResponseEntity<List<PlanningHistory>> getProjectHistory(@PathVariable Long projectId) {
         return ResponseEntity.ok(historyService.getHistoryByProject(projectId));
     }
 
-    /**
-     * POST /api/planning/history
-     *
-     * Save a history entry for non-date edits (status change, name edit, etc.).
-     * Called by the frontend whenever a line item is edited via the form.
-     *
-     * Body: {
-     *   workId:       1,
-     *   lineItemId:   5,
-     *   lineItemName: "SITE SURVEY",
-     *   field:        "status",          // or "lineItemName", "department", etc.
-     *   oldValue:     "NOT STARTED",
-     *   newValue:     "IN PROGRESS",
-     *   reason:       "Work started on site",
-     *   changedBy:    "Suraj"
-     * }
-     */
+
     @PostMapping("/history")
     public ResponseEntity<PlanningHistory> saveHistory(@RequestBody Map<String, Object> body) {
         return ResponseEntity.ok(historyService.saveHistory(body));

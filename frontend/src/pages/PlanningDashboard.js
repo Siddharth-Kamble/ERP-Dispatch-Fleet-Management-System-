@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import {
+import ProjectManagerPage from "../Module/Coordinator/Pages/ProjectManagerPage";import {
   FaPlus, FaArrowLeft, FaEdit, FaTrash, FaHistory,
   FaSave, FaTimes, FaExclamationTriangle,
   FaProjectDiagram, FaTools, FaListAlt, FaHome,
@@ -592,6 +592,7 @@ export default function PlanningDashboard({ onBack }) {
 
   // ── Download modal state ───────────────────────────────────────────────────
   const [downloadModal, setDownloadModal] = useState(null);
+  const [showProjectManager, setShowProjectManager] = useState(false);
   // downloadModal = { history, projectName, workName, sheetLabel } | null
 
   // ── Effects ────────────────────────────────────────────────────────────────
@@ -1054,6 +1055,20 @@ const confirmDayChange = async () => {
               </button>
             );
           })}
+                  )}
+                  <div style={{ padding: "8px 8px 4px", marginTop: 6 }}>
+                    <button
+                      onClick={() => setShowProjectManager(true)}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 12px", background: "#10b981", color: "#fff",
+                        border: "none", borderRadius: 7, fontSize: 13,
+                        fontWeight: 700, cursor: "pointer",
+                      }}>
+                      <FaPlus size={12} style={{ flexShrink: 0 }} />
+                      {!collapsed && <span style={{ whiteSpace: "nowrap" }}>New Project</span>}
+                    </button>
+                  </div>
         </nav>
 
         {!collapsed && (selProject || selWork) && (
@@ -1077,11 +1092,28 @@ const confirmDayChange = async () => {
           </div>
         )}
 
-        {!collapsed && onBack && (
-          <button style={S.sideBack} onClick={onBack}>
-            <FaArrowLeft size={11} /> Back to App
-          </button>
-        )}
+           <div style={{ padding: "10px", borderTop: "1px solid #1e293b",
+                display: "flex", flexDirection: "column", gap: 6 }}>
+                {!collapsed && onBack && (
+                  <button style={S.sideBack} onClick={onBack}>
+                    <FaArrowLeft size={11} /> Back to App
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (window.confirm("Logout?")) window.location.href = "/login";
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "9px 12px", background: "transparent",
+                    border: "1px solid #374151", borderRadius: 7,
+                    color: "#ef4444", fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", width: "100%",
+                  }}>
+                  <FaArrowLeft size={11} style={{ flexShrink: 0 }} />
+                  {!collapsed && <span>Logout</span>}
+                </button>
+              </div>
       </aside>
 
       {/* ── MAIN ── */}
@@ -1533,6 +1565,27 @@ const confirmDayChange = async () => {
           onClose={() => setDownloadModal(null)}
         />
       )}
+            {showProjectManager && (
+              <div style={{
+                position: "fixed", inset: 0, background: "rgba(15,23,42,0.75)",
+                backdropFilter: "blur(4px)", zIndex: 2000, overflowY: "auto",
+              }}>
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setShowProjectManager(false)}
+                    style={{
+                      position: "fixed", top: 16, right: 16, zIndex: 2001,
+                      background: "#ef4444", color: "#fff", border: "none",
+                      borderRadius: "50%", width: 36, height: 36,
+                      fontSize: 18, cursor: "pointer", fontWeight: 700,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                    ✕
+                  </button>
+                  <ProjectManagerPage />
+                </div>
+              </div>
+            )}
     </div>
   );
 }
@@ -2011,284 +2064,6 @@ function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, 
   );
 }
 
-
-
-//
-//function DayOffsetModalContent({ item, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
-//  const days      = parseInt(dayInput, 10);
-//  const validDays = !isNaN(days) && days !== 0;
-//
-//  const newStart = validDays ? addDaysToDate(item.startDate, days) : null;
-//  const newEnd   = validDays && item.endDate ? addDaysToDate(item.endDate, days) : null;
-//
-//  // Find linked items that will cascade
-//  const linkedEntries = (item.linkedItemIds || "").split(",").filter(Boolean);
-//  const linkedIds     = linkedEntries.map(e => Number(e.split(":")[0]));
-//  const linkedItems   = lineItems.filter(i => linkedIds.includes(i.id));
-//  const willCascade   = validDays && Math.abs(days) >= 2 && linkedItems.length > 0;
-//
-//  return (
-//    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-//
-//      {/* Item name */}
-//      <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 15 }}>
-//        {item.lineItemName}
-//        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#64748b" }}>
-//          — Shift Both Dates
-//        </span>
-//      </div>
-//
-//      {/* Current dates */}
-//      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-//        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
-//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
-//            Current Start Date
-//          </div>
-//          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
-//            {fmt(item.startDate) || "Not set"}
-//          </div>
-//        </div>
-//        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
-//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" }}>
-//            Current End Date
-//          </div>
-//          <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>
-//            {fmt(item.endDate) || "Not set"}
-//          </div>
-//        </div>
-//      </div>
-//
-//      {/* Day input */}
-//      <div>
-//        <label style={S.lbl}>
-//          Shift by how many days?
-//          <span style={{ color: "#ef4444" }}> *</span>
-//          <span style={{ marginLeft: 8, fontSize: 10, color: "#94a3b8", fontWeight: 400 }}>
-//            positive = forward · negative = backward
-//          </span>
-//        </label>
-//        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) - 7))}>−7</button>
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) - 1))}>−1</button>
-//          <input
-//            type="number"
-//            value={dayInput}
-//            onChange={e => setDayInput(e.target.value)}
-//            placeholder="e.g. +5 or -3"
-//            style={{ ...S.input, textAlign: "center", fontSize: 18, fontWeight: 700, flex: 1 }}
-//            autoFocus
-//          />
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) + 1))}>+1</button>
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v, 10) || 0) + 7))}>+7</button>
-//        </div>
-//      </div>
-//
-//      {/* Preview */}
-//      {validDays && (
-//        <div style={{
-//          background: days > 0 ? "#fff7ed" : "#f0fdf4",
-//          border: `1px solid ${days > 0 ? "#fdba74" : "#86efac"}`,
-//          borderRadius: 10,
-//          padding: 14,
-//        }}>
-//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 10, textTransform: "uppercase" }}>
-//            Preview
-//          </div>
-//          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-//
-//            {/* Start date row */}
-//            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-//              <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>START DATE</span>
-//              <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
-//                {fmt(item.startDate)}
-//              </span>
-//              <span style={{ color: "#94a3b8" }}>→</span>
-//              <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
-//                {fmt(newStart)}
-//              </span>
-//              <span style={{
-//                background: days > 0 ? "#fee2e2" : "#d1fae5",
-//                color:      days > 0 ? "#991b1b" : "#065f46",
-//                borderRadius: 20, padding: "2px 10px",
-//                fontSize: 11, fontWeight: 800,
-//              }}>
-//                {days > 0 ? `+${days}` : days} days
-//              </span>
-//            </div>
-//
-//            {/* End date row */}
-//            {item.endDate && (
-//              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-//                <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", width: 80 }}>END DATE</span>
-//                <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 14, textDecoration: "line-through" }}>
-//                  {fmt(item.endDate)}
-//                </span>
-//                <span style={{ color: "#94a3b8" }}>→</span>
-//                <span style={{ color: "#059669", fontWeight: 800, fontSize: 14 }}>
-//                  {fmt(newEnd)}
-//                </span>
-//                <span style={{
-//                  background: days > 0 ? "#fee2e2" : "#d1fae5",
-//                  color:      days > 0 ? "#991b1b" : "#065f46",
-//                  borderRadius: 20, padding: "2px 10px",
-//                  fontSize: 11, fontWeight: 800,
-//                }}>
-//                  {days > 0 ? `+${days}` : days} days
-//                </span>
-//              </div>
-//            )}
-//
-//            {/* Duration preserved note */}
-//            <div style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", marginTop: 4 }}>
-//              ✓ Duration preserved — both dates shift by the same {Math.abs(days)} day{Math.abs(days) !== 1 ? "s" : ""}
-//            </div>
-//
-//            {/* Cascade warning */}
-//            {willCascade && (
-//              <div style={{ padding: "8px 12px", background: "#ede9fe", borderRadius: 8, fontSize: 12, color: "#6d28d9", marginTop: 4 }}>
-//                <div style={{ fontWeight: 700, marginBottom: 5 }}>
-//                  <FaLink size={10}/> Linked items will also shift:
-//                </div>
-//                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-//                  {linkedItems.map(li => (
-//                    <span key={li.id} style={{
-//                      background: "#ddd6fe", color: "#4c1d95",
-//                      padding: "3px 10px", borderRadius: 20,
-//                      fontSize: 11, fontWeight: 600,
-//                    }}>
-//                      {li.lineItemName}
-//                    </span>
-//                  ))}
-//                </div>
-//              </div>
-//            )}
-//          </div>
-//        </div>
-//      )}
-//
-//      {/* Reason */}
-//      <div>
-//        <label style={S.lbl}>
-//          Reason for Change <span style={{ color: "#ef4444" }}>*</span>
-//        </label>
-//        <textarea
-//          value={dayReason}
-//          onChange={e => setDayReason(e.target.value)}
-//          placeholder="e.g. Client requested delay, material delivery delayed…"
-//          style={{ ...S.input, height: 80, resize: "vertical" }}
-//        />
-//      </div>
-//
-//      {/* Actions */}
-//      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-//        <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
-//        <button
-//          style={S.saveBtn}
-//          onClick={onConfirm}
-//          disabled={!validDays || !dayReason.trim()}
-//        >
-//          <FaSave size={11}/> Confirm & Record
-//        </button>
-//      </div>
-//    </div>
-//  );
-//}
-//function DayOffsetModalContent({ item, field, dayInput, setDayInput, dayReason, setDayReason, onConfirm, onCancel, lineItems }) {
-//  const days       = parseInt(dayInput, 10);
-//  const validDays  = !isNaN(days) && days !== 0;
-//  const oldDate    = item[field];
-//  const newDate    = validDays ? addDaysToDate(oldDate, days) : null;
-//  const fieldLabel = field === "startDate" ? "Start Date" : "End Date";
-//  const duration   = daysBetween(item.startDate, item.endDate);
-//  const autoNewEndDate = field === "startDate" && validDays && item.endDate
-//    ? addDaysToDate(addDaysToDate(oldDate, days), duration) : null;
-//
-//  const linkedEntries = (item.linkedItemIds || "").split(",").filter(Boolean);
-//  const linkedIds = linkedEntries.map(e => { const parts = e.split(":"); return Number(parts[0]); });
-//  const linkedItems = lineItems.filter(i => linkedIds.includes(i.id));
-//  const willCascade = validDays && Math.abs(days) >= 2 && linkedItems.length > 0;
-//
-//  return (
-//    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-//      <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 15 }}>
-//        {item.lineItemName}
-//        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#64748b" }}>— {fieldLabel}</span>
-//      </div>
-//
-//      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 14 }}>
-//        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".05em" }}>Current {fieldLabel}</div>
-//        <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>{fmt(oldDate) || "Not set"}</div>
-//        {field === "startDate" && item.endDate && (
-//          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Duration: {duration} days → End Date will auto-adjust</div>
-//        )}
-//      </div>
-//
-//      <div>
-//        <label style={S.lbl}>Shift by how many days? <span style={{ color: "#ef4444" }}>*</span></label>
-//        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) - 1))}>−1</button>
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) - 7))}>−7</button>
-//          <input type="number" value={dayInput} onChange={e => setDayInput(e.target.value)} placeholder="e.g. +5 or -3"
-//            style={{ ...S.input, textAlign: "center", fontSize: 18, fontWeight: 700, flex: 1 }} autoFocus />
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) + 1))}>+1</button>
-//          <button style={S.quickBtn} onClick={() => setDayInput(v => String((parseInt(v,10)||0) + 7))}>+7</button>
-//        </div>
-//      </div>
-//
-//      {validDays && (
-//        <div style={{ background: days > 0 ? "#fff7ed" : "#f0fdf4", border: `1px solid ${days > 0 ? "#fdba74" : "#86efac"}`, borderRadius: 10, padding: 14 }}>
-//          <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".05em" }}>Preview</div>
-//          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-//            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-//              <div>
-//                <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 3 }}>{fieldLabel.toUpperCase()}</div>
-//                <span style={{ color: "#ef4444", fontWeight: 800, fontSize: 16, textDecoration: "line-through" }}>{fmt(oldDate)}</span>
-//                <span style={{ color: "#94a3b8", margin: "0 8px" }}>→</span>
-//                <span style={{ color: "#059669", fontWeight: 800, fontSize: 16 }}>{fmt(newDate)}</span>
-//              </div>
-//              <span style={{ background: days > 0 ? "#fee2e2" : "#d1fae5", color: days > 0 ? "#991b1b" : "#065f46", borderRadius: 8, padding: "6px 14px", fontSize: 14, fontWeight: 800 }}>
-//                {days > 0 ? `+${days}` : days} days {days > 0 ? "delayed" : "earlier"}
-//              </span>
-//            </div>
-//            {autoNewEndDate && (
-//              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#1e40af" }}>
-//                🔄 <strong>End Date auto-adjusts:</strong>{" "}
-//                <span style={{ textDecoration: "line-through", color: "#ef4444" }}>{fmt(item.endDate)}</span>
-//                {" → "}
-//                <span style={{ color: "#059669", fontWeight: 700 }}>{fmt(autoNewEndDate)}</span>
-//                {" "}(same {duration}-day duration preserved)
-//              </div>
-//            )}
-//            {willCascade && (
-//              <div style={{ padding: "8px 12px", background: "#ede9fe", borderRadius: 8, fontSize: 12, color: "#6d28d9" }}>
-//                <div style={{ fontWeight: 700, marginBottom: 5 }}><FaLink size={10}/> Linked items will also shift:</div>
-//                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-//                  {linkedItems.map(li => (
-//                    <span key={li.id} style={{ background: "#ddd6fe", color: "#4c1d95", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{li.lineItemName}</span>
-//                  ))}
-//                </div>
-//              </div>
-//            )}
-//          </div>
-//        </div>
-//      )}
-//
-//      <div>
-//        <label style={S.lbl}>Reason for Change <span style={{ color: "#ef4444" }}>*</span></label>
-//        <textarea value={dayReason} onChange={e => setDayReason(e.target.value)}
-//          placeholder="e.g. Client requested delay, material delivery delayed…"
-//          style={{ ...S.input, height: 80, resize: "vertical" }} />
-//      </div>
-//
-//      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-//        <button style={S.cancelBtn} onClick={onCancel}>Cancel</button>
-//        <button style={S.saveBtn} onClick={onConfirm} disabled={!validDays || !dayReason.trim()}>
-//          <FaSave size={11}/> Confirm & Record
-//        </button>
-//      </div>
-//    </div>
-//  );
-//}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // REVISION PANEL
