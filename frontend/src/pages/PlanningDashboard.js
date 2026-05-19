@@ -139,11 +139,9 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
   summaryWs["!cols"] = [{ wch: 20 }, { wch: 50 }];
   XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
 
-  // ── Only include line items the user checked ───────────────────────────────
   const filteredItems = Object.entries(byItem)
     .filter(([name]) => selectedItems.includes(name));
 
-  // ── Which data rows to show in the visual sheet (respects selectedFields) ──
   const ALL_DATA_ROW_DEFS = [
     { key: "whatChanged", label: "WHAT CHANGED", render: h => FIELD_LABELS[h.field] || h.field || "—" },
     { key: "from",        label: "FROM",         render: h => h.field?.includes("Date") ? fmt(h.oldValue) : (h.oldValue || "—") },
@@ -356,6 +354,26 @@ function exportToExcel({ history, selectedItems, selectedFields, projectName, wo
   const safe = s => (s || "unknown").replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/_+/g, "_").trim();
   const filename = `${safe(projectName)}_${safe(workName)}_revisions.xlsx`;
   XLSX.writeFile(wb, filename);
+}
+
+
+
+// ── Inline PDF Schedule Download ──────────────────────────────────────────
+async function downloadSchedulePdf(workId, workName) {
+  if (!workId) { alert("No work selected"); return; }
+  try {
+    const res = await fetch(`${BASE}/api/planning/works/${workId}/report`);
+    if (!res.ok) throw new Error("Server error " + res.status);
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `Project_Schedule_${(workName || workId).replace(/[^a-zA-Z0-9_\-]/g,"_")}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) { alert("PDF download failed: " + e.message); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -848,121 +866,6 @@ const confirmDayChange = async () => {
     showToast("Failed to update date", "error");
   }
 };
-
-
-
-//const confirmDayChange = async () => {
-//  const days = parseInt(dayInput, 10);
-//  if (isNaN(days) || days === 0) {
-//    showToast("Enter a valid number of days (non-zero)", "error");
-//    return;
-//  }
-//  if (!dayReason.trim()) {
-//    showToast("Please enter a reason", "error");
-//    return;
-//  }
-//
-//  const { item } = dayModal;
-//
-//  if (!item.startDate) {
-//    showToast("Start date is missing — edit the item first", "error");
-//    return;
-//  }
-//
-//  const oldStart = item.startDate;
-//  const oldEnd   = item.endDate;
-//  const newStart = addDaysToDate(oldStart, days);
-//  const newEnd   = oldEnd ? addDaysToDate(oldEnd, days) : null;
-//
-//  try {
-//    // ── Shift Start Date ───────────────────────────────────────────────────
-//    await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
-//      field:     "startDate",
-//      oldValue:  oldStart,
-//      newValue:  newStart,
-//      reason:    dayReason,
-//      cascade:   Math.abs(days) >= 2,
-//      changedBy: "User",
-//    });
-//
-//    // ── Shift End Date (same number of days) ───────────────────────────────
-//    if (oldEnd && newEnd) {
-//      await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
-//        field:     "endDate",
-//        oldValue:  oldEnd,
-//        newValue:  newEnd,
-//        reason:    `Auto-adjusted with Start Date — ${dayReason}`,
-//        cascade:   Math.abs(days) >= 2,
-//        changedBy: "System (auto)",
-//      });
-//    }
-//
-//    // ── Build toast message ────────────────────────────────────────────────
-//    const direction = days > 0 ? "forward" : "backward";
-//    let msg = `Both dates shifted ${days > 0 ? "+" : ""}${days} days ${direction} ✓`;
-//    showToast(msg);
-//
-//    setDayModal(null);
-//    setDayInput("");
-//    setDayReason("");
-//    setItemRevisions({});
-//    setExpandedItem(null);
-//    loadLineItems(selWork.id);
-//
-//  } catch {
-//    showToast("Failed to update dates", "error");
-//  }
-//};
-//  const confirmDayChange = async () => {
-//    const days = parseInt(dayInput, 10);
-//    if (isNaN(days) || days === 0) { showToast("Enter a valid number of days (non-zero)", "error"); return; }
-//    if (!dayReason.trim()) { showToast("Please enter a reason", "error"); return; }
-//
-//    const { item, field } = dayModal;
-//    const oldVal = item[field];
-//    if (!oldVal) { showToast("Original date is missing — edit the item first", "error"); return; }
-//    const newVal = addDaysToDate(oldVal, days);
-//
-//    let autoEndDate = null;
-//    if (field === "startDate" && item.endDate) {
-//      const duration = daysBetween(item.startDate, item.endDate);
-//      autoEndDate = addDaysToDate(newVal, duration);
-//    }
-//
-//    try {
-//      const res = await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
-//        field,
-//        oldValue:  oldVal,
-//        newValue:  newVal,
-//        reason:    dayReason,
-//        cascade:   Math.abs(days) >= 2,
-//        changedBy: "User",
-//      });
-//
-//      if (field === "startDate" && autoEndDate && autoEndDate !== item.endDate) {
-//        await axios.put(`${PLAN_API}/line-items/${item.id}/change-date`, {
-//          field:     "endDate",
-//          oldValue:  item.endDate,
-//          newValue:  autoEndDate,
-//          reason:    `Auto-adjusted: same shift as Start Date — ${dayReason}`,
-//          cascade:   false,
-//          changedBy: "System (auto)",
-//        });
-//      }
-//
-//      const cascaded = res.data?.cascadedItems || [];
-//      let msg = `Date shifted by ${days > 0 ? "+" : ""}${days} days ✓`;
-//      if (autoEndDate && field === "startDate") msg += ` · End Date auto-adjusted`;
-//      if (cascaded.length > 0) msg += ` · Also shifted: ${cascaded.join(", ")}`;
-//      showToast(msg);
-//
-//      setDayModal(null); setDayInput(""); setDayReason("");
-//      setItemRevisions({});
-//      setExpandedItem(null);
-//      loadLineItems(selWork.id);
-//    } catch { showToast("Failed to update date", "error"); }
-//  };
-
   const loadHistory = async (type, id, title) => {
     try {
       const url = type === "project"
@@ -1426,14 +1329,23 @@ const confirmDayChange = async () => {
                 </h2>
                 <p style={{ margin: "4px 0 0 16px", fontSize: 12, color: "#94a3b8" }}>{historyTitle}</p>
               </div>
-              {history.length > 0 && (
-                <button onClick={() => openDownloadModal(history, "Change History")}
-                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px",
-                    background: "#059669", color: "#fff", border: "none", borderRadius: 8,
-                    fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <FaFileExcel size={13}/> Export to Excel
-                </button>
-              )}
+           {history.length > 0 && (
+             <div style={{ display: "flex", gap: 8 }}>
+               <button onClick={() => openDownloadModal(history, "Change History")}
+                 style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px",
+                   background: "#059669", color: "#fff", border: "none", borderRadius: 8,
+                   fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                 <FaFileExcel size={13}/> Export to Excel
+               </button>
+               {selWork?.id && (
+                 <button
+                   onClick={() => downloadSchedulePdf(selWork.id, selWork.workName)}
+                   style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#1C3358", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                   <FaDownload size={13}/> Schedule PDF
+                 </button>
+               )}
+             </div>
+           )}
             </div>
 
             {history.length === 0 ? (
@@ -1730,6 +1642,13 @@ function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) 
           style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           <FaFileExcel size={13} /> Export to Excel
         </button>
+        {selWork?.id && (
+          <button
+            onClick={() => downloadSchedulePdf(selWork.id, selWork.workName)}
+            style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#1C3358", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            <FaDownload size={13}/> Schedule PDF
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -2491,7 +2410,6 @@ function StatusBadge({ status }) {
     </span>
   );
 }
-
 function KpiCard({ label, value, icon, color, sub, onClick }) {
   return (
     <div style={{ ...S.kpiCard, borderTop: `4px solid ${color}`, cursor: onClick ? "pointer" : "default" }} onClick={onClick}>
