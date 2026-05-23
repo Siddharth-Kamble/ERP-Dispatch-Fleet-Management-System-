@@ -147,6 +147,9 @@ import LoginPage from "./pages/LoginPage";
 import FloorFlatManager from "./Module/Coordinator/Pages/FloorFlatManager";
 import ProjectManagerPage from "./Module/Coordinator/Pages/ProjectManagerPage";
 import UserVehicleRequestPage from "./Module/Common/Uservehiclerequestpage";
+import WorkOrderPage from "./Module/Coordinator/Pages/WorkOrderPage";
+import WorkOrderListPage from "./Module/Coordinator/Pages/WorkOrderListPage";
+import WorkOrderFormPage from "./Module/Coordinator/Pages/WorkOrderFormPage";
 
 // Admin & VP & Driver
 import AdminDashboard from "./pages/AdminDashboard";
@@ -275,6 +278,14 @@ function App() {
                     <Route path="planning/create" element={<AddVehicleRequisition />} />
                     <Route path="planning/view"  element={<VehicleRequisitionList />} />
                     <Route path="vehicle-requests" element={<UserVehicleRequestPage />} />
+                      <Route path="work-orders"         element={<WorkOrderListPage />} />
+                        <Route path="work-orders/create"  element={<WorkOrderFormPage />} />
+                        <Route path="work-orders/:id"     element={<WorkOrderFormPage />} />
+                    <Route
+                      path="/coordinator-dashboard/work-orders"
+                      element={<WorkOrderPage />}
+                    />
+
                 </Route>
 
                 {/* Vehicle Requisition (standalone) */}

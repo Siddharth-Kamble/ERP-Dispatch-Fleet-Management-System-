@@ -219,6 +219,21 @@ function CoordinatorDashboard() {
                                         <p style={{ fontSize: '14px', color: '#64748b' }}>
                                             Raise & Track Vehicle Requests
                                         </p>
+
+                                    </div>
+                                    {/* WORK ORDER CARD */}
+                                    <div
+                                        className="card"
+                                        style={{ borderTop: "4px solid #8b5cf6" }}
+                                        onClick={() => navigate("/coordinator-dashboard/work-orders")}
+                                    >
+                                        <div style={{ fontSize: 30, color: "#8b5cf6", marginBottom: 15 }}>
+                                            <FaClipboardList />
+                                        </div>
+                                        <h3>Work Orders</h3>
+                                        <p style={{ fontSize: '14px', color: '#64748b' }}>
+                                            Create & Track Work Orders
+                                        </p>
                                     </div>
                                 </div>
                             </div>

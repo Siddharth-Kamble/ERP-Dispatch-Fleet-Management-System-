@@ -1,3 +1,5 @@
+
+
 package onedeoleela.onedeoleela.Controller;
 
 import onedeoleela.onedeoleela.Entity.PlanningLineItem;
@@ -13,6 +15,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * REST controller for PDF schedule report generation.
+ *
+ * Endpoint: GET /api/planning/works/{workId}/report
+ *
+ * Returns a PDF file with:
+ *   - Exact Excel-style layout (orange title, tan sub-headers, alternating data rows)
+ *   - 10 columns: SR NO | LINE ITEM | START DATE | END DATE | DAYS |
+ *                 DEPARTMENT | ACTION PERSON | STATUS | DELAY IN DAYS | REMARK
+ *   - DELAY IN DAYS computed from planning history:
+ *       delay = current startDate − original planned startDate
+ *       (positive = delayed, 0 = on time, negative = early)
+ */
 @RestController
 @RequestMapping("/api/planning")
 @CrossOrigin(origins = "*")
@@ -22,22 +37,10 @@ public class PlanningReportController {
     @Autowired private PlanningLineItemService lineItemService;
     @Autowired private PlanningReportService   reportService;
 
-    /**
-     * GET /api/planning/works/{workId}/report
-     *
-     * Generates a PDF Project Schedule Report identical in layout to the
-     * original Excel-style sheet:
-     *   – Header band with project name, tower/floor info, work order no & date
-     *   – Column headers: SR NO | LINE ITEM | START DATE | END DATE | DAYS |
-     *                     DEPARTMENT | ACTION PERSON | STATUS
-     *   – One data row per line item, alternating row shading
-     *   – Footer: TOTAL DAYS
-     *
-     * Response: application/pdf with filename attachment header.
-     */
     @GetMapping("/works/{workId}/report")
     public ResponseEntity<byte[]> generateWorkReport(@PathVariable Long workId) {
-        PlanningWork       work      = workService.getWorkById(workId);
+
+        PlanningWork           work  = workService.getWorkById(workId);
         List<PlanningLineItem> items = lineItemService.getLineItemsByWork(workId);
 
         byte[] pdf = reportService.generateScheduleReport(work, items);

@@ -19,8 +19,8 @@ const PLAN_API = `${BASE}/api/planning`;
 
 const STATUS_OPTIONS = ["NOT STARTED", "IN PROGRESS", "DONE", "ON HOLD", "CANCELLED"];
 const DEPARTMENTS    = [
-  "PROJECT DEPT", "DESIGN", "PURCHASE", "FACTORY",
-  "POWDER COATING", "SITE", "ACCOUNTS", "MD", "OTHER",
+  "PROJECT", "DESIGN", "PURCHASE", "PRODUCTION",
+  "POWDER COATING", "SITE", "ACCOUNTS","DISPATCH","COORDINATOR","BILLING", "ACCOUNT", "MD", ,"OTHER",
 ];
 
 const LINK_TRIGGER_OPTIONS = [
@@ -1638,17 +1638,17 @@ function RevisionsPage({ history, lineItems, selProject, selWork, onDownload }) 
             {selProject?.projectName} → {selWork?.workName}
           </p>
         </div>
-        <button onClick={onDownload}
-          style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-          <FaFileExcel size={13} /> Export to Excel
-        </button>
-        {selWork?.id && (
-          <button
-            onClick={() => downloadSchedulePdf(selWork.id, selWork.workName)}
-            style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#1C3358", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            <FaDownload size={13}/> Schedule PDF
-          </button>
-        )}
+       <button onClick={onDownload}
+         style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+         <FaFileExcel size={13} /> Export to Excel
+       </button>
+       {selWork?.id && (
+         <button
+           onClick={() => downloadSchedulePdf(selWork.id, selWork.workName)}
+           style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: "#1C3358", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+           <FaDownload size={13}/> Schedule PDF
+         </button>
+       )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>

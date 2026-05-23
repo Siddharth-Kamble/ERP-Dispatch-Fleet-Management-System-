@@ -1,8 +1,14 @@
 
+
+
+
 package onedeoleela.onedeoleela.Service;
 
+import onedeoleela.onedeoleela.Entity.PlanningHistory;
 import onedeoleela.onedeoleela.Entity.PlanningLineItem;
 import onedeoleela.onedeoleela.Entity.PlanningWork;
+import onedeoleela.onedeoleela.Repository.PlanningHistoryRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.apache.pdfbox.pdmodel.*;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.*;
@@ -14,574 +20,593 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
+import java.util.*;
 
 /**
- * Generates a PDF Project Schedule Report matching the Excel layout:
+ * Generates a Project Schedule PDF.
  *
- * ┌──────────────────────────────────────────────────────────────────────────┐
- * │        AURO REALTY – THE REGENT PHASE-II TOWER 5   (orange bg)          │
- * ├──────────────────────┬──────────────────────────────┬────────────────────┤
- * │  30TH TO 35TH FLOORS │  WORK ORDER NO – BAWOJ/...  │ PROJECT CODE: ODL  │
- * ├────────┬─────┬───────┴──────────┬───────┬───────────┤                    │
- * │30TH... │ 249 │ NOS  │ 15417     │ SQFT  │           │                    │
- * ├────────┴─────┴───────────────────┴───────┴───────────┴────────────────────┤
- * │ SR NO. │ LINE ITEM │ START DATE │ END DATE │ DAYS │ DEPT │ ACTION │STATUS│REMARK│
- * ├────────┴───────────┴────────────┴──────────┴──────┴──────┴────────┴──────┴──────┤
- * │  data rows ...                                                             │
- * ├────────────────────────────────────────────────────────────────────────────┤
- * │                        │ TOTAL DAYS │  66  │                               │
- * └────────────────────────────────────────────────────────────────────────────┘
+ * KEY CHANGES vs previous version:
  *
- * Maven dependency:
- * <dependency>
- *     <groupId>org.apache.pdfbox</groupId>
- *     <artifactId>pdfbox</artifactId>
- *     <version>3.0.2</version>
- * </dependency>
+ *   1. REASON column is FULLY shown — text wraps across multiple lines.
+ *      Row height expands dynamically to fit all wrapped lines.
+ *      No more truncation with "...".
+ *
+ *   2. SEPARATOR LINE after each data row — drawn with a thicker (1.2pt),
+ *      darker colour (#404040) line to give a professional, readable look.
+ *
+ *   3. Multi-page support — a new page is added automatically when the
+ *      remaining vertical space cannot fit the next row.
+ *
+ * COLUMNS (11 total):
+ *   SR NO | LINE ITEM | START DATE | END DATE | DAYS
+ *   | DEPARTMENT | ACTION PERSON | STATUS | REASON | DELAY IN DAYS | REMARK
  */
 @Service
 public class PlanningReportService {
 
-    // ── Page geometry (A4 landscape) ──────────────────────────────────────────
-    private static final float PAGE_W   = PDRectangle.A4.getHeight(); // 841.89
-    private static final float PAGE_H   = PDRectangle.A4.getWidth();  // 595.28
-    private static final float MARGIN_X = 20f;
-    private static final float MARGIN_Y = 20f;
-    private static final float TABLE_W  = PAGE_W - 2 * MARGIN_X;
+    @Autowired
+    private PlanningHistoryRepository historyRepository;
 
-    // ── Row heights ───────────────────────────────────────────────────────────
-    private static final float ROW_TITLE   = 26f;   // "AURO REALTY" title row
-    private static final float ROW_HDR2    = 18f;   // work order / project code row
-    private static final float ROW_HDR3    = 18f;   // 249 NOS / 15417 SQFT row
-    private static final float ROW_COL_HDR = 20f;   // column labels row
-    private static final float ROW_DATA    = 15f;   // each data row
-    private static final float ROW_FOOTER  = 17f;   // TOTAL DAYS row
+    // ── Page: A4 Landscape ────────────────────────────────────────────────────
+    private static final float PW = PDRectangle.A4.getHeight(); // 841.89
+    private static final float PH = PDRectangle.A4.getWidth();  // 595.28
+    private static final float MX = 14f;
+    private static final float MY = 18f;
+    private static final float TW = PW - 2 * MX;               // ≈ 813.89
+
+    // ── Fixed row heights ─────────────────────────────────────────────────────
+    private static final float H_TITLE   = 26f;
+    private static final float H_SUB1    = 17f;
+    private static final float H_SUB2    = 17f;
+    private static final float H_GAP     =  4f;
+    private static final float H_COLHDR  = 22f;
+    private static final float H_DATA_MIN = 16f;  // minimum row height for data rows
+    private static final float H_FOOTER  = 17f;
 
     // ── Font sizes ────────────────────────────────────────────────────────────
     private static final float FS_TITLE  = 11f;
-    private static final float FS_HDR    = 8f;
-    private static final float FS_COL    = 7.5f;
-    private static final float FS_DATA   = 7f;
+    private static final float FS_SUB    =  8f;
+    private static final float FS_COLHDR =  7f;
+    private static final float FS_DATA   =  6.8f;
+    private static final float LINE_LEAD =  8.5f; // line leading for wrapped text
 
-    // ── 9 columns: SR | LINE ITEM | START | END | DAYS | DEPT | ACTION | STATUS | REMARK
-    //    Must sum to TABLE_W = 801.89
-    private static final float[] COL_W = { 28f, 185f, 65f, 65f, 32f, 105f, 110f, 75f, 137f };
-    // Indices for reference:
-    // 0=SR, 1=LINE_ITEM, 2=START, 3=END, 4=DAYS, 5=DEPT, 6=ACTION, 7=STATUS, 8=REMARK
+    // ── 11 columns — must sum to TW ≈ 813.89 ─────────────────────────────────
+    // SR | LINE ITEM | START | END | DAYS | DEPT | ACTION | STATUS | REASON | DELAY | REMARK
+    private static final float[] CW = {
+            22f,    // 0  SR NO.
+            150f,   // 1  LINE ITEM
+            54f,    // 2  START DATE
+            54f,    // 3  END DATE
+            26f,    // 4  DAYS
+            85f,    // 5  DEPARTMENT
+            88f,    // 6  ACTION PERSON
+            56f,    // 7  STATUS
+            118f,   // 8  REASON  ← wide enough to wrap nicely
+            46f,    // 9  DELAY IN DAYS
+            114.89f // 10 REMARK
+    };
 
-    // ── Colours (R,G,B 0-1) ───────────────────────────────────────────────────
-    // Orange title background (matches image)
-    private static final float[] CLR_ORANGE     = { 0.98f, 0.65f, 0.20f }; // #FABA33
-    private static final float[] CLR_BLACK      = { 0f,    0f,    0f    };
-    private static final float[] CLR_WHITE      = { 1f,    1f,    1f    };
-    // Light orange for sub-header rows
-    private static final float[] CLR_HDR_LIGHT  = { 0.99f, 0.85f, 0.60f }; // #FCDA99
-    // Column header row – same orange
-    private static final float[] CLR_COL_HDR_BG = { 0.98f, 0.65f, 0.20f }; // same as title
-    // Alternating row shading – very light yellow
-    private static final float[] CLR_ROW_ALT    = { 1f,    0.98f, 0.92f };
-    private static final float[] CLR_ROW_WHITE  = { 1f,    1f,    1f    };
-    // Footer background – light orange
-    private static final float[] CLR_FOOTER_BG  = { 0.99f, 0.88f, 0.65f };
-    // Grid lines
-    private static final float[] CLR_GRID       = { 0.50f, 0.50f, 0.50f };
-    // Status text colours
-    private static final float[] CLR_DONE       = { 0.05f, 0.50f, 0.05f };
-    private static final float[] CLR_IN_PROG    = { 0.10f, 0.40f, 0.80f };
-    private static final float[] CLR_ON_HOLD    = { 0.75f, 0.45f, 0.00f };
-    private static final float[] CLR_CANCELLED  = { 0.75f, 0.10f, 0.10f };
-    private static final float[] CLR_NOT_START  = { 0.40f, 0.40f, 0.40f };
+    // ── Colours ───────────────────────────────────────────────────────────────
+    private static final float[] ORANGE    = c(245, 166,  35);
+    private static final float[] TAN       = c(250, 215, 160);
+    private static final float[] WHITE     = { 1f, 1f, 1f };
+    private static final float[] CREAM     = c(254, 249, 240);
+    private static final float[] GRID      = c(128, 128, 128);
+    private static final float[] SEPARATOR = c( 64,  64,  64); // darker line between rows
+    private static final float[] BLACK     = { 0f, 0f, 0f };
+    private static final float[] RED       = c(204,   0,   0);
+    private static final float[] GREEN     = c(  0, 102,   0);
+    private static final float[] BLUE      = c( 25,  90, 200);
+    private static final float[] AMBER     = c(160,  90,   0);
 
-    private static final DateTimeFormatter DATE_FMT =
-            DateTimeFormatter.ofPattern("dd-MM-yyyy");
+    private static float[] c(int r, int g, int b) {
+        return new float[]{ r / 255f, g / 255f, b / 255f };
+    }
 
+    private static final DateTimeFormatter DF = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ENTRY POINT
     // ─────────────────────────────────────────────────────────────────────────
 
     public byte[] generateScheduleReport(PlanningWork work,
                                          List<PlanningLineItem> items) {
         try (PDDocument doc = new PDDocument()) {
 
-            PDPage page = new PDPage(new PDRectangle(PAGE_W, PAGE_H));
-            doc.addPage(page);
-
             PDFont bold = PDType1Font.HELVETICA_BOLD;
             PDFont reg  = PDType1Font.HELVETICA;
 
-            try (PDPageContentStream cs = new PDPageContentStream(
-                    doc, page, PDPageContentStream.AppendMode.OVERWRITE, true)) {
+            Map<Long, Long>   delayMap  = buildDelayMap(items);
+            Map<Long, String> reasonMap = buildReasonMap(items);
 
-                float y = PAGE_H - MARGIN_Y;
+            // ── First page ────────────────────────────────────────────────────
+            PDPage firstPage = new PDPage(new PDRectangle(PW, PH));
+            doc.addPage(firstPage);
 
-                // ── Row 1: Title ──────────────────────────────────────────────
-                y = drawTitleRow(cs, work, bold, y);
+            // We'll hold a mutable reference so we can open new pages mid-loop
+            PageContext ctx = new PageContext(doc, firstPage, bold, reg);
 
-                // ── Row 2: Floors | Work Order No | Project Code ──────────────
-                y = drawRow2(cs, work, bold, reg, y);
+            float y = PH - MY;
+            y = rowTitle(ctx.cs, bold, work, y);
+            y = rowSub1(ctx.cs, bold, work, y);
+            y = rowSub2(ctx.cs, bold, reg, work, y);
+            y -= H_GAP;
+            y = rowColHeader(ctx.cs, bold, y);
+            y = rowWorkOrderDate(ctx.cs, reg, bold, work, y);
 
-                // ── Row 3: Floors label | 249 NOS 15417 SQFT ─────────────────
-                y = drawRow3(cs, work, bold, reg, y);
+            long totalDays = 0;
 
-                // ── Blank gap row ─────────────────────────────────────────────
-                y -= 4f;
+            for (int i = 0; i < items.size(); i++) {
+                PlanningLineItem item  = items.get(i);
+                long days   = calcDays(item.getStartDate(), item.getEndDate());
+                totalDays  += days;
+                long   delay  = delayMap.getOrDefault(item.getId(), 0L);
+                String reason = reasonMap.getOrDefault(item.getId(), "");
+                int    sr     = item.getSrNo() != null ? item.getSrNo() : (i + 1);
 
-                // ── Column header row ─────────────────────────────────────────
-                y = drawColumnHeader(cs, bold, y);
+                // Pre-calculate how tall this row needs to be (driven by reason wrapping)
+                List<String> reasonLines = wrapText(reg, FS_DATA, reason, CW[8] - 6f);
+                float rowH = Math.max(H_DATA_MIN,
+                        reasonLines.size() * LINE_LEAD + 4f);
 
-                // ── Work Order Date row (special first data row) ──────────────
-                y = drawWorkOrderDateRow(cs, work, reg, bold, y);
+                // ── New page if not enough room ───────────────────────────────
+                if (y - rowH - H_FOOTER < MY) {
+                    // close current page stream
+                    ctx.cs.close();
 
-                // ── Data rows ─────────────────────────────────────────────────
-                long totalDays = 0;
-                // srNo uses item.getSrNo() if set, else sequential
-                for (int i = 0; i < items.size(); i++) {
-                    PlanningLineItem item = items.get(i);
-                    long days = calcDays(item.getStartDate(), item.getEndDate());
-                    totalDays += days;
-                    boolean alt = (i % 2 == 0); // first row is white, second is alt
-                    int srNo = item.getSrNo() != null ? item.getSrNo() : (i + 1);
-                    y = drawDataRow(cs, reg, bold, item, srNo, days, alt, y);
+                    PDPage newPage = new PDPage(new PDRectangle(PW, PH));
+                    doc.addPage(newPage);
+                    ctx = new PageContext(doc, newPage, bold, reg);
+
+                    y = PH - MY;
+                    y = rowColHeader(ctx.cs, bold, y); // repeat headers on new page
                 }
 
-                // ── Footer: TOTAL DAYS ────────────────────────────────────────
-                drawFooterRow(cs, bold, reg, totalDays, y);
+                y = rowData(ctx.cs, reg, bold, item, sr, days, delay,
+                        reason, reasonLines, rowH, i % 2 == 1, y);
             }
 
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            doc.save(baos);
-            return baos.toByteArray();
+            rowFooter(ctx.cs, bold, totalDays, y);
+            ctx.cs.close();
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            doc.save(out);
+            return out.toByteArray();
 
         } catch (IOException e) {
-            throw new RuntimeException("Failed to generate PDF report", e);
+            throw new RuntimeException("PDF generation failed", e);
         }
     }
 
-    // ── ROW 1: Full-width orange title ────────────────────────────────────────
+    // ── Helper to manage page + content stream ────────────────────────────────
+    private static class PageContext {
+        PDPageContentStream cs;
+        PageContext(PDDocument doc, PDPage page, PDFont bold, PDFont reg) throws IOException {
+            cs = new PDPageContentStream(doc, page,
+                    PDPageContentStream.AppendMode.OVERWRITE, true);
+        }
+    }
 
-    private float drawTitleRow(PDPageContentStream cs,
-                               PlanningWork work,
-                               PDFont bold, float y) throws IOException {
+    // ─────────────────────────────────────────────────────────────────────────
+    // TEXT WRAPPING
+    // ─────────────────────────────────────────────────────────────────────────
 
-        fillRect(cs, MARGIN_X, y - ROW_TITLE, TABLE_W, ROW_TITLE, CLR_ORANGE);
-        drawHLine(cs, MARGIN_X, y,             TABLE_W, CLR_GRID);
-        drawHLine(cs, MARGIN_X, y - ROW_TITLE, TABLE_W, CLR_GRID);
-        drawVLine(cs, MARGIN_X,           y, ROW_TITLE, CLR_GRID);
-        drawVLine(cs, MARGIN_X + TABLE_W, y, ROW_TITLE, CLR_GRID);
+    /**
+     * Breaks {@code text} into lines that each fit within {@code maxWidth} points
+     * at font size {@code sz}. Splits on spaces; never splits mid-word unless the
+     * word alone is wider than maxWidth.
+     */
+    private List<String> wrapText(PDFont font, float sz, String text, float maxWidth) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isBlank()) {
+            lines.add("");
+            return lines;
+        }
+        String[] words = text.trim().split("\\s+");
+        StringBuilder current = new StringBuilder();
 
-        String title = work.getProject() != null
+        for (String word : words) {
+            String candidate = current.length() == 0 ? word : current + " " + word;
+            float w = textWidth(font, sz, candidate);
+            if (w <= maxWidth) {
+                current = new StringBuilder(candidate);
+            } else {
+                if (current.length() > 0) {
+                    lines.add(current.toString());
+                    current = new StringBuilder(word);
+                } else {
+                    // single word wider than column — force it
+                    lines.add(word);
+                }
+            }
+        }
+        if (current.length() > 0) lines.add(current.toString());
+        return lines;
+    }
+
+    private float textWidth(PDFont font, float sz, String text) {
+        try { return font.getStringWidth(text) / 1000f * sz; }
+        catch (Exception e) { return 0f; }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DELAY MAP & REASON MAP
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private Map<Long, Long> buildDelayMap(List<PlanningLineItem> items) {
+        Map<Long, Long> map = new HashMap<>();
+        for (PlanningLineItem item : items) {
+            if (item.getId() == null) { map.put(null, 0L); continue; }
+            List<PlanningHistory> hist =
+                    historyRepository.findByLineItemIdOrderByChangedAtAsc(item.getId());
+            Optional<PlanningHistory> firstStart = hist.stream()
+                    .filter(h -> "startDate".equals(h.getField())
+                            && h.getOldValue() != null && !h.getOldValue().isBlank())
+                    .findFirst();
+            if (firstStart.isPresent() && item.getStartDate() != null) {
+                try {
+                    LocalDate original = LocalDate.parse(firstStart.get().getOldValue());
+                    map.put(item.getId(), ChronoUnit.DAYS.between(original, item.getStartDate()));
+                } catch (Exception e) { map.put(item.getId(), 0L); }
+            } else {
+                map.put(item.getId(), 0L);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Returns the LATEST reason for each line item — full text, no truncation.
+     * The PDF renderer handles wrapping.
+     */
+    private Map<Long, String> buildReasonMap(List<PlanningLineItem> items) {
+        Map<Long, String> map = new HashMap<>();
+        for (PlanningLineItem item : items) {
+            if (item.getId() == null) { map.put(null, ""); continue; }
+            List<PlanningHistory> hist =
+                    historyRepository.findByLineItemIdOrderByChangedAtAsc(item.getId());
+            if (hist.isEmpty()) {
+                map.put(item.getId(), "");
+            } else {
+                PlanningHistory latest = hist.get(hist.size() - 1);
+                // ✅ FULL reason — no substring / truncation here
+                String reason = latest.getReason() != null ? latest.getReason().trim() : "";
+                map.put(item.getId(), reason);
+            }
+        }
+        return map;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ROW RENDERERS — header rows (fixed height)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private float rowTitle(PDPageContentStream cs, PDFont bold,
+                           PlanningWork work, float y) throws IOException {
+        fill(cs, MX, y - H_TITLE, TW, H_TITLE, ORANGE);
+        box(cs, MX, y, TW, H_TITLE);
+        String title = (work.getProject() != null && work.getProject().getProjectName() != null)
                 ? work.getProject().getProjectName().toUpperCase()
                 : "PROJECT SCHEDULE";
-
-        drawCentredText(cs, bold, FS_TITLE,
-                MARGIN_X, y - ROW_TITLE, TABLE_W, ROW_TITLE,
-                title, CLR_BLACK);
-
-        return y - ROW_TITLE;
+        cText(cs, bold, FS_TITLE, MX, y - H_TITLE, TW, H_TITLE, title, BLACK);
+        return y - H_TITLE;
     }
 
-    // ── ROW 2: [Floors/Work Name] | [Work Order No] | [Project Code] ─────────
-
-    private float drawRow2(PDPageContentStream cs,
-                           PlanningWork work,
-                           PDFont bold, PDFont reg,
-                           float y) throws IOException {
-
-        // Split TABLE_W into 3 sections
-        float col1W = TABLE_W * 0.30f;
-        float col2W = TABLE_W * 0.42f;
-        float col3W = TABLE_W - col1W - col2W;
-
-        fillRect(cs, MARGIN_X,               y - ROW_HDR2, col1W, ROW_HDR2, CLR_HDR_LIGHT);
-        fillRect(cs, MARGIN_X + col1W,       y - ROW_HDR2, col2W, ROW_HDR2, CLR_HDR_LIGHT);
-        fillRect(cs, MARGIN_X + col1W + col2W, y - ROW_HDR2, col3W, ROW_HDR2, CLR_HDR_LIGHT);
-
-        drawHLine(cs, MARGIN_X, y - ROW_HDR2, TABLE_W, CLR_GRID);
-        drawVLine(cs, MARGIN_X,                   y, ROW_HDR2, CLR_GRID);
-        drawVLine(cs, MARGIN_X + col1W,            y, ROW_HDR2, CLR_GRID);
-        drawVLine(cs, MARGIN_X + col1W + col2W,    y, ROW_HDR2, CLR_GRID);
-        drawVLine(cs, MARGIN_X + TABLE_W,          y, ROW_HDR2, CLR_GRID);
-
-        String workName = work.getWorkName() != null
-                ? work.getWorkName().toUpperCase() : "";
-
-        String woNo = "WORK ORDER NO - "
-                + (work.getWorkOrderNo() != null ? work.getWorkOrderNo().toUpperCase() : "");
-
-        // projectCode – derive from workOrderNo or description if needed
-        // In the image it shows "PROJECT CODE: ODL 1056"
-        // We store it in description or derive; adapt as needed.
-        String projCode = "PROJECT CODE: "
-                + (work.getDescription() != null ? work.getDescription().toUpperCase() : "");
-
-        // Col 1 – work name, centred
-        drawCentredText(cs, bold, FS_HDR,
-                MARGIN_X, y - ROW_HDR2, col1W, ROW_HDR2,
-                workName, CLR_BLACK);
-
-        // Col 2 – work order no, centred
-        drawCentredText(cs, bold, FS_HDR,
-                MARGIN_X + col1W, y - ROW_HDR2, col2W, ROW_HDR2,
-                woNo, CLR_BLACK);
-
-        // Col 3 – project code, centred
-        drawCentredText(cs, bold, FS_HDR,
-                MARGIN_X + col1W + col2W, y - ROW_HDR2, col3W, ROW_HDR2,
-                projCode, CLR_BLACK);
-
-        return y - ROW_HDR2;
+    private float rowSub1(PDPageContentStream cs, PDFont bold,
+                          PlanningWork work, float y) throws IOException {
+        fill(cs, MX, y - H_SUB1, TW, H_SUB1, TAN);
+        box(cs, MX, y, TW, H_SUB1);
+        float c1 = TW * 0.285f, c2 = TW * 0.430f, c3 = TW - c1 - c2;
+        vLine(cs, MX + c1,      y, H_SUB1);
+        vLine(cs, MX + c1 + c2, y, H_SUB1);
+        cText(cs, bold, FS_SUB, MX,           y - H_SUB1, c1, H_SUB1,
+                nvl(work.getWorkName()).toUpperCase(), BLACK);
+        cText(cs, bold, FS_SUB, MX + c1,      y - H_SUB1, c2, H_SUB1,
+                "WORK ORDER NO - " + nvl(work.getWorkOrderNo()).toUpperCase(), BLACK);
+        String projCode = work.getProject() != null
+                ? "PROJECT CODE: " + nvl(work.getProject().getProjectCode()) : "";
+        cText(cs, bold, FS_SUB, MX + c1 + c2, y - H_SUB1, c3, H_SUB1, projCode, BLACK);
+        return y - H_SUB1;
     }
 
-    // ── ROW 3: [Floors label] | [249] [NOS] [15417] [SQFT] ──────────────────
-    // In the image: "30TH TO 35TH FLOORS" | 249 | NOS | 15417 | SQFT | (empty) | (empty)
-
-    private float drawRow3(PDPageContentStream cs,
-                           PlanningWork work,
-                           PDFont bold, PDFont reg,
-                           float y) throws IOException {
-
-        // Section widths matching image proportions
-        float s1 = TABLE_W * 0.30f;  // "30TH TO 35TH FLOORS"
-        float s2 = TABLE_W * 0.08f;  // "249"
-        float s3 = TABLE_W * 0.07f;  // "NOS"
-        float s4 = TABLE_W * 0.08f;  // "15417"
-        float s5 = TABLE_W * 0.07f;  // "SQFT"
-        float s6 = TABLE_W - s1 - s2 - s3 - s4 - s5; // remainder
-
-        float[] xs = {
-                MARGIN_X,
-                MARGIN_X + s1,
-                MARGIN_X + s1 + s2,
-                MARGIN_X + s1 + s2 + s3,
-                MARGIN_X + s1 + s2 + s3 + s4,
-                MARGIN_X + s1 + s2 + s3 + s4 + s5
-        };
-        float[] ws = { s1, s2, s3, s4, s5, s6 };
-
-        for (int i = 0; i < xs.length; i++) {
-            fillRect(cs, xs[i], y - ROW_HDR3, ws[i], ROW_HDR3, CLR_HDR_LIGHT);
-            drawVLine(cs, xs[i], y, ROW_HDR3, CLR_GRID);
-        }
-        drawVLine(cs, MARGIN_X + TABLE_W, y, ROW_HDR3, CLR_GRID);
-        drawHLine(cs, MARGIN_X, y - ROW_HDR3, TABLE_W, CLR_GRID);
-
-        // Parse nos/sqft from workName or use placeholder fields
-        // Image shows "249 NOS" and "15417 SQFT" as separate cells
-        // We'll try to pull from work fields; adjust mapping as needed
-        String floorsLabel = work.getWorkName() != null
-                ? work.getWorkName().toUpperCase() : "";
-
-        // If your entity has nos/sqft fields, replace these:
-        String nos  = "249";   // replace with work.getNos() if field exists
-        String sqft = "15417"; // replace with work.getSqft() if field exists
-
-        drawCentredText(cs, reg, FS_HDR,
-                xs[0], y - ROW_HDR3, ws[0], ROW_HDR3, floorsLabel, CLR_BLACK);
-        drawCentredText(cs, bold, FS_HDR,
-                xs[1], y - ROW_HDR3, ws[1], ROW_HDR3, nos, CLR_BLACK);
-        drawCentredText(cs, bold, FS_HDR,
-                xs[2], y - ROW_HDR3, ws[2], ROW_HDR3, "NOS", CLR_BLACK);
-        drawCentredText(cs, bold, FS_HDR,
-                xs[3], y - ROW_HDR3, ws[3], ROW_HDR3, sqft, CLR_BLACK);
-        drawCentredText(cs, bold, FS_HDR,
-                xs[4], y - ROW_HDR3, ws[4], ROW_HDR3, "SQFT", CLR_BLACK);
-        // xs[5] left empty
-
-        return y - ROW_HDR3;
+    private float rowSub2(PDPageContentStream cs, PDFont bold, PDFont reg,
+                          PlanningWork work, float y) throws IOException {
+        fill(cs, MX, y - H_SUB2, TW, H_SUB2, TAN);
+        box(cs, MX, y, TW, H_SUB2);
+        String[] p   = nvl(work.getDescription()).trim().split("\\s+");
+        String nosV  = p.length > 0 ? p[0] : "";
+        String sqftV = p.length > 2 ? p[2] : "";
+        float c0 = TW * 0.285f, c1 = TW * 0.052f, c2 = TW * 0.055f,
+                c3 = TW * 0.068f, c4 = TW * 0.055f;
+        vLine(cs, MX + c0,                     y, H_SUB2);
+        vLine(cs, MX + c0 + c1,                y, H_SUB2);
+        vLine(cs, MX + c0 + c1 + c2,           y, H_SUB2);
+        vLine(cs, MX + c0 + c1 + c2 + c3,      y, H_SUB2);
+        vLine(cs, MX + c0 + c1 + c2 + c3 + c4, y, H_SUB2);
+        cText(cs, bold, FS_SUB, MX + c0,                   y-H_SUB2, c1, H_SUB2, nosV,  BLACK);
+        cText(cs, bold, FS_SUB, MX + c0 + c1,              y-H_SUB2, c2, H_SUB2, "NOS", BLACK);
+        cText(cs, bold, FS_SUB, MX + c0 + c1 + c2,         y-H_SUB2, c3, H_SUB2, sqftV, BLACK);
+        cText(cs, bold, FS_SUB, MX + c0 + c1 + c2 + c3,    y-H_SUB2, c4, H_SUB2, "SQFT",BLACK);
+        return y - H_SUB2;
     }
 
-    // ── Column header row ─────────────────────────────────────────────────────
-
-    private float drawColumnHeader(PDPageContentStream cs,
-                                   PDFont bold, float y) throws IOException {
-
+    private float rowColHeader(PDPageContentStream cs, PDFont bold, float y) throws IOException {
         String[] labels = {
-                "SR NO.", "LINE ITEM", "START DATE", "END DATE",
-                "DAYS", "DEPARTMENT", "ACTION PERSON", "STATUS", "REMARK"
+                "SR NO.", "LINE ITEM", "START DATE", "END DATE", "DAYS",
+                "DEPARTMENT", "ACTION PERSON", "STATUS", "REASON", "DELAY IN\nDAYS", "REMARK"
+        };
+        fill(cs, MX, y - H_COLHDR, TW, H_COLHDR, TAN);
+        box(cs, MX, y, TW, H_COLHDR);
+        float x = MX;
+        for (int col = 0; col < labels.length; col++) {
+            vLine(cs, x, y, H_COLHDR);
+            if (labels[col].contains("\n")) {
+                String[] parts = labels[col].split("\n");
+                float lineH = H_COLHDR / 2f;
+                for (int li = 0; li < parts.length; li++) {
+                    float lineY = y - H_COLHDR + (parts.length - li) * lineH;
+                    cText(cs, bold, FS_COLHDR, x, lineY - lineH, CW[col], lineH, parts[li], BLACK);
+                }
+            } else {
+                cText(cs, bold, FS_COLHDR, x, y - H_COLHDR, CW[col], H_COLHDR, labels[col], BLACK);
+            }
+            x += CW[col];
+        }
+        vLine(cs, x, y, H_COLHDR);
+        return y - H_COLHDR;
+    }
+
+    private float rowWorkOrderDate(PDPageContentStream cs, PDFont reg, PDFont bold,
+                                   PlanningWork work, float y) throws IOException {
+        float rowH = H_DATA_MIN;
+        fill(cs, MX, y - rowH, TW, rowH, WHITE);
+        float x = MX;
+        for (int col = 0; col < CW.length; col++) {
+            vLine(cs, x, y, rowH);
+            float ty = y - rowH + (rowH - FS_DATA) / 2f + 1.5f;
+            if (col == 1) {
+                lText(cs, reg, FS_DATA, x + 3f, ty, "WORK ORDER DATE", BLACK);
+            } else if (col == 2 && work.getStartDate() != null) {
+                cText(cs, bold, FS_DATA, x, y - rowH, CW[col], rowH,
+                        work.getStartDate().format(DF), BLACK);
+            } else if (col == 7) {
+                cText(cs, reg, FS_DATA, x, y - rowH, CW[col], rowH, "DONE", GREEN);
+            }
+            x += CW[col];
+        }
+        vLine(cs, x, y, rowH);
+        // separator after work order date row
+        separatorLine(cs, MX, y - rowH, TW);
+        return y - rowH;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DATA ROW — dynamic height, full reason wrapping
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Draws one data row with dynamic height.
+     *
+     * @param reasonLines pre-computed wrapped lines for the reason text
+     * @param rowH        pre-computed row height (fits all reason lines)
+     */
+    private float rowData(PDPageContentStream cs, PDFont reg, PDFont bold,
+                          PlanningLineItem item, int sr, long days, long delay,
+                          String reason, List<String> reasonLines, float rowH,
+                          boolean alt, float y) throws IOException {
+
+        // ── Background fill ───────────────────────────────────────────────────
+        fill(cs, MX, y - rowH, TW, rowH, alt ? CREAM : WHITE);
+
+        String delayStr = delay > 0 ? "+" + delay : String.valueOf(delay);
+        float[] delayClr = delay > 0 ? RED : GREEN;
+
+        // ── Values for non-reason columns ─────────────────────────────────────
+        String[] vals = {
+                String.valueOf(sr),           // 0  SR NO.
+                nvl(item.getLineItemName()),   // 1  LINE ITEM
+                fmtD(item.getStartDate()),     // 2  START DATE
+                fmtD(item.getEndDate()),       // 3  END DATE
+                String.valueOf(days),          // 4  DAYS
+                nvl(item.getDepartment()),     // 5  DEPARTMENT
+                nvl(item.getActionPerson()),   // 6  ACTION PERSON
+                nvl(item.getStatus()),         // 7  STATUS
+                null,                          // 8  REASON — handled separately below
+                delayStr,                      // 9  DELAY IN DAYS
+                nvl(item.getRemark())          // 10 REMARK
         };
 
-        fillRect(cs, MARGIN_X, y - ROW_COL_HDR, TABLE_W, ROW_COL_HDR, CLR_COL_HDR_BG);
-        drawHLine(cs, MARGIN_X, y,              TABLE_W, CLR_GRID);
-        drawHLine(cs, MARGIN_X, y - ROW_COL_HDR, TABLE_W, CLR_GRID);
+        float x = MX;
+        for (int col = 0; col < CW.length; col++) {
+            vLine(cs, x, y, rowH);
 
-        float x = MARGIN_X;
-        for (int c = 0; c < labels.length; c++) {
-            drawVLine(cs, x, y, ROW_COL_HDR, CLR_GRID);
-            drawCentredText(cs, bold, FS_COL,
-                    x, y - ROW_COL_HDR, COL_W[c], ROW_COL_HDR,
-                    labels[c], CLR_BLACK);
-            x += COL_W[c];
-        }
-        drawVLine(cs, x, y, ROW_COL_HDR, CLR_GRID);
+            if (col == 8) {
+                // ── REASON: render each wrapped line ──────────────────────────
+                // Start from top of cell with a small top-padding
+                float topPad = 3f;
+                float lineY  = y - topPad - FS_DATA; // baseline of first line
 
-        return y - ROW_COL_HDR;
-    }
+                for (String line : reasonLines) {
+                    if (lineY < y - rowH + 2f) break; // safety — don't draw outside cell
+                    lText(cs, reg, FS_DATA, x + 3f, lineY, line, BLACK);
+                    lineY -= LINE_LEAD;
+                }
 
-    // ── Special "WORK ORDER DATE" row (appears before SR 1 in the image) ──────
-
-    private float drawWorkOrderDateRow(PDPageContentStream cs,
-                                       PlanningWork work,
-                                       PDFont reg, PDFont bold,
-                                       float y) throws IOException {
-
-        // White background, no SR no
-        fillRect(cs, MARGIN_X, y - ROW_DATA, TABLE_W, ROW_DATA, CLR_ROW_WHITE);
-
-        float x = MARGIN_X;
-        for (int c = 0; c < COL_W.length; c++) {
-            drawVLine(cs, x, y, ROW_DATA, CLR_GRID);
-            if (c == 1) {
-                // LINE ITEM column – "WORK ORDER DATE"
-                drawLeftText(cs, reg, FS_DATA,
-                        x + 4, y - ROW_DATA + (ROW_DATA - FS_DATA) / 2f + 1f,
-                        "WORK ORDER DATE", CLR_BLACK);
-            } else if (c == 2 && work.getStartDate() != null) {
-                // START DATE column – show the work order date in bold
-                drawCentredText(cs, bold, FS_DATA,
-                        x, y - ROW_DATA, COL_W[c], ROW_DATA,
-                        work.getStartDate().format(DATE_FMT), CLR_BLACK);
-            } else if (c == 7) {
-                // STATUS column – DONE
-                drawCentredText(cs, reg, FS_DATA,
-                        x, y - ROW_DATA, COL_W[c], ROW_DATA,
-                        "DONE", CLR_DONE);
+            } else {
+                // ── All other columns ─────────────────────────────────────────
+                String v = vals[col] != null ? vals[col] : "";
+                switch (col) {
+                    case 0, 2, 3, 4 ->
+                            cText(cs, reg, FS_DATA, x, y - rowH, CW[col], rowH, v, BLACK);
+                    case 7 ->
+                            cText(cs, reg, FS_DATA, x, y - rowH, CW[col], rowH,
+                                    v, statusClr(v));
+                    case 9 ->
+                            cText(cs, bold, FS_DATA, x, y - rowH, CW[col], rowH,
+                                    v, delayClr);
+                    default -> {
+                        // Wrap LINE ITEM, DEPARTMENT, ACTION PERSON, REMARK too
+                        List<String> wrapped = wrapText(reg, FS_DATA, v, CW[col] - 5f);
+                        float topPad = 3f;
+                        float lineY  = y - topPad - FS_DATA;
+                        for (String line : wrapped) {
+                            if (lineY < y - rowH + 2f) break;
+                            lText(cs, reg, FS_DATA, x + 3f, lineY, line, BLACK);
+                            lineY -= LINE_LEAD;
+                        }
+                    }
+                }
             }
-            x += COL_W[c];
+            x += CW[col];
         }
-        drawVLine(cs, x, y, ROW_DATA, CLR_GRID);
-        drawHLine(cs, MARGIN_X, y - ROW_DATA, TABLE_W, CLR_GRID);
 
-        return y - ROW_DATA;
+        // ── Right border ──────────────────────────────────────────────────────
+        vLine(cs, x, y, rowH);
+
+        // ── Professional separator line after every row ───────────────────────
+        separatorLine(cs, MX, y - rowH, TW);
+
+        return y - rowH;
     }
 
-    // ── Draw one data row ─────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // FOOTER
+    // ─────────────────────────────────────────────────────────────────────────
 
-    private float drawDataRow(PDPageContentStream cs,
-                              PDFont reg, PDFont bold,
-                              PlanningLineItem item,
-                              int srNo, long days,
-                              boolean alt, float y) throws IOException {
-
-        float[] bg = alt ? CLR_ROW_WHITE : CLR_ROW_ALT;
-        fillRect(cs, MARGIN_X, y - ROW_DATA, TABLE_W, ROW_DATA, bg);
-
-        String[] values = {
-                String.valueOf(srNo),
-                nvl(item.getLineItemName()),
-                fmtDate(item.getStartDate()),
-                fmtDate(item.getEndDate()),
-                days >= 0 ? String.valueOf(days) : "0",
-                nvl(item.getDepartment()),
-                nvl(item.getActionPerson()),
-                nvl(item.getStatus()),
-                nvl(item.getRemark())
-        };
-
-        float x = MARGIN_X;
-        for (int c = 0; c < values.length; c++) {
-            drawVLine(cs, x, y, ROW_DATA, CLR_GRID);
-
-            float textY = y - ROW_DATA + (ROW_DATA - FS_DATA) / 2f + 1f;
-
-            switch (c) {
-                case 0, 4 ->
-                    // SR NO and DAYS – centred numeric
-                        drawCentredText(cs, reg, FS_DATA,
-                                x, y - ROW_DATA, COL_W[c], ROW_DATA,
-                                values[c], CLR_BLACK);
-
-                case 2, 3 ->
-                    // Dates – centred
-                        drawCentredText(cs, reg, FS_DATA,
-                                x, y - ROW_DATA, COL_W[c], ROW_DATA,
-                                values[c], CLR_BLACK);
-
-                case 7 ->
-                    // STATUS – coloured text, centred
-                        drawStatusCell(cs, reg, x, y, COL_W[c], ROW_DATA, values[c]);
-
-                default ->
-                    // Line item, dept, action person, remark – left aligned
-                        drawLeftText(cs, reg, FS_DATA,
-                                x + 4, textY, values[c], CLR_BLACK);
-            }
-            x += COL_W[c];
-        }
-        drawVLine(cs, x, y, ROW_DATA, CLR_GRID);
-        drawHLine(cs, MARGIN_X, y - ROW_DATA, TABLE_W, CLR_GRID);
-
-        return y - ROW_DATA;
+    private void rowFooter(PDPageContentStream cs, PDFont bold,
+                           long totalDays, float y) throws IOException {
+        fill(cs, MX, y - H_FOOTER, TW, H_FOOTER, TAN);
+        box(cs, MX, y, TW, H_FOOTER);
+        float labelW = CW[0] + CW[1] + CW[2] + CW[3];
+        float valX   = MX + labelW;
+        vLine(cs, valX,         y, H_FOOTER);
+        vLine(cs, valX + CW[4], y, H_FOOTER);
+        cText(cs, bold, FS_COLHDR, MX,   y - H_FOOTER, labelW, H_FOOTER, "TOTAL DAYS", BLACK);
+        cText(cs, bold, FS_COLHDR, valX, y - H_FOOTER, CW[4],  H_FOOTER,
+                String.valueOf(totalDays), BLACK);
     }
 
-    // ── Footer: TOTAL DAYS row ────────────────────────────────────────────────
-    // In the image the "TOTAL DAYS" label spans up to the DAYS column,
-    // and the number appears in the DAYS cell.
+    // ─────────────────────────────────────────────────────────────────────────
+    // DRAWING PRIMITIVES
+    // ─────────────────────────────────────────────────────────────────────────
 
-    private void drawFooterRow(PDPageContentStream cs,
-                               PDFont bold, PDFont reg,
-                               long totalDays, float y) throws IOException {
-
-        fillRect(cs, MARGIN_X, y - ROW_FOOTER, TABLE_W, ROW_FOOTER, CLR_FOOTER_BG);
-        drawHLine(cs, MARGIN_X, y,              TABLE_W, CLR_GRID);
-        drawHLine(cs, MARGIN_X, y - ROW_FOOTER, TABLE_W, CLR_GRID);
-        drawVLine(cs, MARGIN_X,           y, ROW_FOOTER, CLR_GRID);
-        drawVLine(cs, MARGIN_X + TABLE_W, y, ROW_FOOTER, CLR_GRID);
-
-        // "TOTAL DAYS" label – right-aligned into the column just before DAYS
-        // DAYS column starts at: sum of COL_W[0..3]
-        float daysColX = MARGIN_X + COL_W[0] + COL_W[1] + COL_W[2] + COL_W[3];
-        float daysColW = COL_W[4];
-
-        // Draw vertical separator before DAYS cell
-        drawVLine(cs, daysColX, y, ROW_FOOTER, CLR_GRID);
-        drawVLine(cs, daysColX + daysColW, y, ROW_FOOTER, CLR_GRID);
-
-        float textY = y - ROW_FOOTER + (ROW_FOOTER - FS_COL) / 2f + 1f;
-
-        // Label – right side of the block before DAYS
-        drawRightText(cs, bold, FS_COL,
-                MARGIN_X, textY, daysColX - MARGIN_X - 4f,
-                "TOTAL DAYS", CLR_BLACK);
-
-        // Value – centred in DAYS column
-        drawCentredText(cs, bold, FS_COL,
-                daysColX, y - ROW_FOOTER, daysColW, ROW_FOOTER,
-                String.valueOf(totalDays), CLR_DONE);
-    }
-
-    // ── Status cell with colour ───────────────────────────────────────────────
-
-    private void drawStatusCell(PDPageContentStream cs, PDFont font,
-                                float x, float y,
-                                float w, float h,
-                                String status) throws IOException {
-        float[] color;
-        if (status == null || status.isBlank()) {
-            color = CLR_NOT_START;
-            status = "";
-        } else {
-            color = switch (status.trim().toUpperCase()) {
-                case "DONE"         -> CLR_DONE;
-                case "IN PROGRESS"  -> CLR_IN_PROG;
-                case "ON HOLD"      -> CLR_ON_HOLD;
-                case "CANCELLED"    -> CLR_CANCELLED;
-                case "NOT STARTED"  -> CLR_NOT_START;
-                default             -> CLR_NOT_START;
-            };
-        }
-        if (!status.isBlank()) {
-            drawCentredText(cs, font, FS_DATA,
-                    x, y - h, w, h,
-                    status.toUpperCase(), color);
-        }
-    }
-
-    // ── Low-level drawing helpers ─────────────────────────────────────────────
-
-    private void fillRect(PDPageContentStream cs,
-                          float x, float y, float w, float h,
-                          float[] rgb) throws IOException {
+    /** Solid fill rectangle. */
+    private void fill(PDPageContentStream cs, float x, float y,
+                      float w, float h, float[] rgb) throws IOException {
         cs.setNonStrokingColor(rgb[0], rgb[1], rgb[2]);
         cs.addRect(x, y, w, h);
         cs.fill();
         cs.setNonStrokingColor(0f, 0f, 0f);
     }
 
-    private void drawHLine(PDPageContentStream cs,
-                           float x, float y, float w,
-                           float[] rgb) throws IOException {
-        cs.setStrokingColor(rgb[0], rgb[1], rgb[2]);
+    /** Outer border rectangle (stroke only). */
+    private void box(PDPageContentStream cs, float x, float topY,
+                     float w, float h) throws IOException {
+        cs.setStrokingColor(GRID[0], GRID[1], GRID[2]);
+        cs.setLineWidth(0.5f);
+        cs.addRect(x, topY - h, w, h);
+        cs.stroke();
+    }
+
+    /** Thin vertical divider between columns. */
+    private void vLine(PDPageContentStream cs, float x, float topY, float h) throws IOException {
+        cs.setStrokingColor(GRID[0], GRID[1], GRID[2]);
         cs.setLineWidth(0.4f);
+        cs.moveTo(x, topY);
+        cs.lineTo(x, topY - h);
+        cs.stroke();
+    }
+
+    /**
+     * Professional separator line drawn at the BOTTOM of each data row.
+     * Uses a thicker line (1.2pt) and a darker colour (#404040 = SEPARATOR)
+     * to give a clean, grid-like appearance in the printed PDF.
+     */
+    private void separatorLine(PDPageContentStream cs, float x, float y, float w)
+            throws IOException {
+        cs.setStrokingColor(SEPARATOR[0], SEPARATOR[1], SEPARATOR[2]);
+        cs.setLineWidth(1.2f);
         cs.moveTo(x, y);
         cs.lineTo(x + w, y);
         cs.stroke();
-    }
-
-    private void drawVLine(PDPageContentStream cs,
-                           float x, float y, float h,
-                           float[] rgb) throws IOException {
-        cs.setStrokingColor(rgb[0], rgb[1], rgb[2]);
+        // reset to default thin line for subsequent drawing
+        cs.setStrokingColor(GRID[0], GRID[1], GRID[2]);
         cs.setLineWidth(0.4f);
-        cs.moveTo(x, y);
-        cs.lineTo(x, y - h);
-        cs.stroke();
     }
 
-    private void drawCentredText(PDPageContentStream cs,
-                                 PDFont font, float size,
-                                 float cellX, float cellY,
-                                 float cellW, float cellH,
-                                 String text, float[] rgb) throws IOException {
+    /** Centred text inside a cell rectangle. */
+    private void cText(PDPageContentStream cs, PDFont font, float sz,
+                       float cx, float cy, float cw, float ch,
+                       String text, float[] rgb) throws IOException {
         if (text == null || text.isBlank()) return;
         try {
-            String t = truncate(font, size, text, cellW - 4f);
-            float tw = font.getStringWidth(t) / 1000f * size;
-            float tx = cellX + (cellW - tw) / 2f;
-            float ty = cellY + (cellH - size) / 2f + 1f;
-            drawText(cs, font, size, tx, ty, t, rgb);
+            String t = trunc(font, sz, text, cw - 3f);
+            float tw = font.getStringWidth(t) / 1000f * sz;
+            float tx = cx + (cw - tw) / 2f;
+            float ty = cy + (ch - sz) / 2f + 1.5f;
+            dText(cs, font, sz, tx, ty, t, rgb);
         } catch (Exception ignored) {}
     }
 
-    private void drawLeftText(PDPageContentStream cs,
-                              PDFont font, float size,
-                              float x, float y,
-                              String text, float[] rgb) throws IOException {
+    /** Left-aligned text at absolute (x, y). */
+    private void lText(PDPageContentStream cs, PDFont font, float sz,
+                       float x, float y, String text, float[] rgb) throws IOException {
+        if (text == null || text.isBlank()) return;
+        try { dText(cs, font, sz, x, y, text, rgb); }
+        catch (Exception ignored) {}
+    }
+
+    /** Emit one text string at exact coordinates. */
+    private void dText(PDPageContentStream cs, PDFont font, float sz,
+                       float x, float y, String text, float[] rgb) throws IOException {
         if (text == null || text.isBlank()) return;
         try {
-            drawText(cs, font, size, x, y, truncate(font, size, text, 200f), rgb);
+            cs.beginText();
+            cs.setFont(font, sz);
+            cs.setNonStrokingColor(rgb[0], rgb[1], rgb[2]);
+            cs.newLineAtOffset(x, y);
+            cs.showText(text);
+            cs.endText();
+            cs.setNonStrokingColor(0f, 0f, 0f);
         } catch (Exception ignored) {}
     }
 
-    private void drawRightText(PDPageContentStream cs,
-                               PDFont font, float size,
-                               float cellX, float y,
-                               float cellW,
-                               String text, float[] rgb) throws IOException {
-        if (text == null || text.isBlank()) return;
+    /**
+     * Truncate text so it fits within maxW — used only for single-line centred
+     * columns where wrapping is not appropriate (SR NO, dates, days, delay).
+     */
+    private String trunc(PDFont font, float sz, String text, float maxW) {
+        if (text == null || text.isBlank()) return "";
         try {
-            float tw = font.getStringWidth(text) / 1000f * size;
-            float x  = cellX + cellW - tw;
-            drawText(cs, font, size, x, y, text, rgb);
+            if (font.getStringWidth(text) / 1000f * sz <= maxW) return text;
+            while (text.length() > 1) {
+                text = text.substring(0, text.length() - 1);
+                if (font.getStringWidth(text + ".") / 1000f * sz <= maxW) return text + ".";
+            }
         } catch (Exception ignored) {}
-    }
-
-    private void drawText(PDPageContentStream cs,
-                          PDFont font, float size,
-                          float x, float y,
-                          String text, float[] rgb) throws IOException {
-        cs.beginText();
-        cs.setFont(font, size);
-        cs.setNonStrokingColor(rgb[0], rgb[1], rgb[2]);
-        cs.newLineAtOffset(x, y);
-        cs.showText(text);
-        cs.endText();
-        cs.setNonStrokingColor(0f, 0f, 0f);
-    }
-
-    private String truncate(PDFont font, float size,
-                            String text, float maxW) throws IOException {
-        if (text == null) return "";
-        float w = font.getStringWidth(text) / 1000f * size;
-        if (w <= maxW) return text;
-        while (text.length() > 1) {
-            text = text.substring(0, text.length() - 1);
-            w = font.getStringWidth(text + "…") / 1000f * size;
-            if (w <= maxW) return text + "…";
-        }
         return text;
     }
 
-    // ── Utilities ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // UTILITIES
+    // ─────────────────────────────────────────────────────────────────────────
 
-    private long calcDays(LocalDate start, LocalDate end) {
-        if (start == null || end == null) return 0;
-        return Math.max(ChronoUnit.DAYS.between(start, end), 0);
+    private float[] statusClr(String s) {
+        if (s == null) return BLACK;
+        return switch (s.trim().toUpperCase()) {
+            case "DONE"        -> GREEN;
+            case "IN PROGRESS" -> BLUE;
+            case "ON HOLD"     -> AMBER;
+            case "CANCELLED"   -> RED;
+            default            -> BLACK;
+        };
     }
 
-    private String fmtDate(LocalDate d) {
-        return d != null ? d.format(DATE_FMT) : "";
+    private long calcDays(LocalDate s, LocalDate e) {
+        if (s == null || e == null) return 0;
+        return Math.max(0, ChronoUnit.DAYS.between(s, e));
     }
 
-    private String nvl(String s) {
-        return s != null ? s : "";
-    }
+    private String fmtD(LocalDate d) { return d != null ? d.format(DF) : ""; }
+    private String nvl(String s)     { return s != null ? s : ""; }
 }
