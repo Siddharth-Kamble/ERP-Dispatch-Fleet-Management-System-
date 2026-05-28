@@ -36,26 +36,69 @@ const EMPTY_ROW = {
 };
 
 /* ─── WORKING HOURS PARSER ──────────────────────────────────────────────── */
+//function parseHours(timeSlot) {
+//  if (!timeSlot || !timeSlot.trim()) return 0;
+//  const ts = timeSlot.trim().toUpperCase();
+//  if (ts === "CANCEL" || ts === "CANCELLED") return 0;
+//  const endIsPM = ts.endsWith("PM");
+//  const endIsAM = ts.endsWith("AM");
+//  const clean = ts.replace("PM", "").replace("AM", "").trim();
+//  const parts = clean.split("-");
+//  if (parts.length !== 2) return 0;
+//  const toDecimal = (t) => {
+//    const hm = t.trim().split(":");
+//    if (hm.length !== 2) return NaN;
+//    return parseFloat(hm[0]) + parseFloat(hm[1]) / 60;
+//  };
+//  let startH = toDecimal(parts[0]);
+//  let endH   = toDecimal(parts[1]);
+//  if (isNaN(startH) || isNaN(endH)) return 0;
+//  if (endIsPM && endH < 12) endH += 12;
+//  if (endIsAM && endH === 12) endH = 0;
+//  if (endH < startH) endH += 12;
+//  return Math.max(0, endH - startH);
+//}
+
 function parseHours(timeSlot) {
   if (!timeSlot || !timeSlot.trim()) return 0;
-  const ts = timeSlot.trim().toUpperCase();
+
+  let ts = timeSlot.trim().toUpperCase()
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, "");
   if (ts === "CANCEL" || ts === "CANCELLED") return 0;
-  const endIsPM = ts.endsWith("PM");
-  const endIsAM = ts.endsWith("AM");
-  const clean = ts.replace("PM", "").replace("AM", "").trim();
-  const parts = clean.split("-");
+
+  const parts = ts.split("-");
   if (parts.length !== 2) return 0;
-  const toDecimal = (t) => {
-    const hm = t.trim().split(":");
-    if (hm.length !== 2) return NaN;
-    return parseFloat(hm[0]) + parseFloat(hm[1]) / 60;
-  };
-  let startH = toDecimal(parts[0]);
-  let endH   = toDecimal(parts[1]);
-  if (isNaN(startH) || isNaN(endH)) return 0;
-  if (endIsPM && endH < 12) endH += 12;
-  if (endIsAM && endH === 12) endH = 0;
-  if (endH < startH) endH += 12;
+
+  function parseToken(token) {
+    const isPM = token.endsWith("PM");
+    const isAM = token.endsWith("AM");
+    const clean = token.replace(/[AP]M$/, "");
+    const hm = clean.split(":");
+    if (hm.length !== 2) return null;
+    let h = parseFloat(hm[0]);
+    const m = parseFloat(hm[1]);
+    if (isNaN(h) || isNaN(m)) return null;
+    if (isPM && h < 12) h += 12;
+    if (isAM && h === 12) h = 0;
+    return { hours: h + m / 60, hasAmPm: isPM || isAM, isPM, isAM };
+  }
+
+  const start = parseToken(parts[0]);
+  const end   = parseToken(parts[1]);
+  if (!start || !end) return 0;
+
+  let startH = start.hours;
+  let endH   = end.hours;
+
+  // No suffix on either — if end < start, assume end crossed noon
+  if (!start.hasAmPm && !end.hasAmPm && endH < startH) endH += 12;
+
+  // Only end has suffix — if gap > 12h, start is also PM
+  if (!start.hasAmPm && end.hasAmPm) {
+    if (end.isPM && endH - startH > 12) startH += 12;
+  }
+
   return Math.max(0, endH - startH);
 }
 function formatHours(total) {

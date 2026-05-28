@@ -9,6 +9,9 @@ import ProjectManagerPage from "../Module/Coordinator/Pages/ProjectManagerPage";
   FaDownload, FaUser, FaBuilding, FaChevronDown, FaChevronUp,
   FaBell, FaColumns, FaFileExcel,
 } from "react-icons/fa";
+
+import WorkTemplatePage, { SaveAsTemplateModal } from "../Module/Planning/WorkTemplatePage";
+import { FaLayerGroup } from "react-icons/fa";
 import { FaRegClock } from "react-icons/fa";
 import axios from "axios";
 import XLSX from "xlsx-js-style";
@@ -107,6 +110,7 @@ const NAV = [
   { key: "lineItems", icon: FaListAlt,        label: "Line Items",     color: "#f59e0b" },
   { key: "revisions", icon: FaColumns,        label: "Revisions",      color: "#06b6d4" },
   { key: "history",   icon: FaHistory,        label: "Change History", color: "#ef4444" },
+  { key: "templates", icon: FaLayerGroup,     label: "Templates",      color: "#8b5cf6" },
   { key: "notifications", icon: FaBell,       label: "Notifications",  color: "#f97316" },
 ];
 
@@ -611,6 +615,8 @@ export default function PlanningDashboard({ onBack }) {
   // ── Download modal state ───────────────────────────────────────────────────
   const [downloadModal, setDownloadModal] = useState(null);
   const [showProjectManager, setShowProjectManager] = useState(false);
+    const [saveTemplateModal, setSaveTemplateModal] = useState(null);
+
   // downloadModal = { history, projectName, workName, sheetLabel } | null
 
   // ── Effects ────────────────────────────────────────────────────────────────
@@ -662,14 +668,27 @@ export default function PlanningDashboard({ onBack }) {
     } catch { showToast("Failed to save work", "error"); }
   };
 
-  const deleteWork = async (id) => {
-    if (!window.confirm("Delete this work and all its line items?")) return;
-    try {
-      await axios.delete(`${PLAN_API}/works/${id}`);
-      showToast("Work deleted");
-      loadWorks(selProject.projectId);
-    } catch { showToast("Delete failed", "error"); }
-  };
+const deleteWork = async (id) => {
+  if (!window.confirm(
+    "Delete this work and all its line items?\n\n" +
+    "✅ Any template saved from this work will NOT be deleted — " +
+    "it stays in your template library."
+  )) return;
+  try {
+    await axios.delete(`${PLAN_API}/works/${id}`);
+    showToast("Work deleted — templates are unaffected ✓");
+    loadWorks(selProject.projectId);
+  } catch { showToast("Delete failed", "error"); }
+};
+
+//  const deleteWork = async (id) => {
+//    if (!window.confirm("Delete this work and all its line items?")) return;
+//    try {
+//      await axios.delete(`${PLAN_API}/works/${id}`);
+//      showToast("Work deleted");
+//      loadWorks(selProject.projectId);
+//    } catch { showToast("Delete failed", "error"); }
+//  };
 
   const loadLineItems = async (workId) => {
     try {
@@ -760,17 +779,7 @@ export default function PlanningDashboard({ onBack }) {
     } catch { showToast("Delete failed", "error"); }
   };
 
-//  const openDayModal = (item, field) => {
-//    setDayModal({ item, field });
-//    setDayInput("");
-//    setDayReason("");
-//  };
 
-//const openDayModal = (item) => {
-//  setDayModal({ item });   // removed "field" — we always shift both dates now
-//  setDayInput("");
-//  setDayReason("");
-//};
 
 const openDayModal = (item, field) => {
   setDayModal({ item, field });
@@ -958,7 +967,7 @@ const confirmDayChange = async () => {
               </button>
             );
           })}
-                  )}
+
                   <div style={{ padding: "8px 8px 4px", marginTop: 6 }}>
                     <button
                       onClick={() => setShowProjectManager(true)}
@@ -1118,13 +1127,15 @@ const confirmDayChange = async () => {
             ) : (
               <div style={S.cardGrid}>
                 {works.length === 0 && <EmptyState msg='No works yet. Click "New Work" to create the first one.' />}
-                {works.map(w => (
-                  <WorkCard key={w.id} w={w}
-                    onOpen={() => goToLineItems(w)}
-                    onEdit={() => { setEditingItem(w); setShowWorkForm(true); }}
-                    onDelete={() => deleteWork(w.id)}
-                    onHistory={() => loadHistory("work", w.id, `Work: ${w.workName}`)} />
-                ))}
+            {works.map(w => (
+              <WorkCard key={w.id} w={w}
+                onOpen={() => goToLineItems(w)}
+                onEdit={() => { setEditingItem(w); setShowWorkForm(true); }}
+                onDelete={() => deleteWork(w.id)}
+                onHistory={() => loadHistory("work", w.id, `Work: ${w.workName}`)}
+                onSaveTemplate={() => setSaveTemplateModal({ workId: w.id, workName: w.workName })} />
+            ))}
+
               </div>
             )}
           </div>
@@ -1393,6 +1404,16 @@ const confirmDayChange = async () => {
             onDismissAll={() => setDismissedNotifs(new Set(notifications.map(n => n.id)))}
           />
         )}
+        {/* ══ TEMPLATES ══ */}
+                {activeNav === "templates" && (
+                  <WorkTemplatePage
+                    onTemplateApplied={(newWork) => {
+                      showToast(`Work "${newWork.workName}" created! Add dates to get started.`);
+                      setSelWork(newWork);
+                      setActiveNav("lineItems");
+                    }}
+                  />
+                )}
       </main>
 
       {/* ══ MODALS ══ */}
@@ -1477,6 +1498,20 @@ const confirmDayChange = async () => {
           onClose={() => setDownloadModal(null)}
         />
       )}
+
+       {/* ── Save As Template Modal ── */}
+            {saveTemplateModal && (
+              <SaveAsTemplateModal
+                workId={saveTemplateModal.workId}
+                workName={saveTemplateModal.workName}
+                onClose={() => setSaveTemplateModal(null)}
+                onSaved={() => {
+                  setSaveTemplateModal(null);
+                  showToast("Template saved successfully ✓");
+                }}
+                showToast={showToast}
+              />
+            )}
             {showProjectManager && (
               <div style={{
                 position: "fixed", inset: 0, background: "rgba(15,23,42,0.75)",
@@ -2351,7 +2386,7 @@ function ProjectCard({ p, onOpen, onHistory }) {
   );
 }
 
-function WorkCard({ w, onOpen, onEdit, onDelete, onHistory }) {
+function WorkCard({ w, onOpen, onEdit, onDelete, onHistory, onSaveTemplate }) {
   return (
     <div style={S.workCard}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -2360,9 +2395,10 @@ function WorkCard({ w, onOpen, onEdit, onDelete, onHistory }) {
           <div style={S.cardSub}>📄 {w.workOrderNo}</div>
         </div>
         <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-          <ActionBtn color="#8b5cf6" title="History" onClick={onHistory}><FaHistory size={11}/></ActionBtn>
-          <ActionBtn color="#2563eb" title="Edit"    onClick={onEdit}><FaEdit size={11}/></ActionBtn>
-          <ActionBtn color="#ef4444" title="Delete"  onClick={onDelete}><FaTrash size={11}/></ActionBtn>
+          <ActionBtn color="#8b5cf6" title="History"          onClick={onHistory}><FaHistory size={11}/></ActionBtn>
+          <ActionBtn color="#2563eb" title="Edit"             onClick={onEdit}><FaEdit size={11}/></ActionBtn>
+          <ActionBtn color="#ef4444" title="Delete"           onClick={onDelete}><FaTrash size={11}/></ActionBtn>
+          <ActionBtn color="#10b981" title="Save as Template" onClick={onSaveTemplate}><FaLayerGroup size={11}/></ActionBtn>
         </div>
       </div>
       {(w.startDate || w.endDate) && (

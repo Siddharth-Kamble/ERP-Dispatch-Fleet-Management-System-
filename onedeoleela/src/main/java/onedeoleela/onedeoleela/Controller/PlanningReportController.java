@@ -15,19 +15,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * REST controller for PDF schedule report generation.
- *
- * Endpoint: GET /api/planning/works/{workId}/report
- *
- * Returns a PDF file with:
- *   - Exact Excel-style layout (orange title, tan sub-headers, alternating data rows)
- *   - 10 columns: SR NO | LINE ITEM | START DATE | END DATE | DAYS |
- *                 DEPARTMENT | ACTION PERSON | STATUS | DELAY IN DAYS | REMARK
- *   - DELAY IN DAYS computed from planning history:
- *       delay = current startDate − original planned startDate
- *       (positive = delayed, 0 = on time, negative = early)
- */
 @RestController
 @RequestMapping("/api/planning")
 @CrossOrigin(origins = "*")

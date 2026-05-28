@@ -1,10 +1,18 @@
 package onedeoleela.onedeoleela.Coordinator.Entity;
 
 import jakarta.persistence.*;
+import lombok.*;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+
+@Data
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
 @Entity
 @Table(name = "work_orders")
 public class WorkOrder {
@@ -25,23 +33,6 @@ public class WorkOrder {
     @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<WorkOrderItem> items = new ArrayList<>();
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
 
-    public String getWorkOrderNo() { return workOrderNo; }
-    public void setWorkOrderNo(String workOrderNo) { this.workOrderNo = workOrderNo; }
 
-    public String getProjectName() { return projectName; }
-    public void setProjectName(String projectName) { this.projectName = projectName; }
-
-    public LocalDate getDate() { return date; }
-    public void setDate(LocalDate date) { this.date = date; }
-
-    public List<WorkOrderItem> getItems() { return items; }
-    public void setItems(List<WorkOrderItem> items) {
-        this.items.clear();
-        if (items != null) {
-            items.forEach(i -> { i.setWorkOrder(this); this.items.add(i); });
-        }
-    }
 }
