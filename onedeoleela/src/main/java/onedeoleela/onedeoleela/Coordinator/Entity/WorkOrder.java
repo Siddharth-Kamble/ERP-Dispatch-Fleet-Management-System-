@@ -1,3 +1,5 @@
+
+
 package onedeoleela.onedeoleela.Coordinator.Entity;
 
 import jakarta.persistence.*;
@@ -6,7 +8,6 @@ import lombok.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-
 
 @Data
 @Getter
@@ -27,12 +28,13 @@ public class WorkOrder {
     @Column(name = "project_name", nullable = false)
     private String projectName;
 
+    // ── NEW FIELD ─────────────────────────────────────────────────────────────
+    @Column(name = "tower_name")
+    private String towerName;
+
     @Column(name = "wo_date")
     private LocalDate date;
 
     @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<WorkOrderItem> items = new ArrayList<>();
-
-
-
 }

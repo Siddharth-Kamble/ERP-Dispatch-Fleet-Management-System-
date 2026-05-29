@@ -1,6 +1,4 @@
 
-
-
 package onedeoleela.onedeoleela.Coordinator.Entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -42,51 +40,31 @@ public class WorkOrderItem {
     @Column(name = "series")
     private String series;
 
-    /** Length in millimetres as entered by the user */
     @Column(precision = 10, scale = 4)
     private BigDecimal length;
 
-    /** Height in millimetres as entered by the user */
     @Column(precision = 10, scale = 4)
     private BigDecimal height;
 
-    /**
-     * Sqft auto-calculated from: L(mm) × H(mm) ÷ 1,000,000 × 10.764
-     * Computed on the frontend; stored here for reference and server-side audit.
-     */
     @Column(precision = 12, scale = 4)
     private BigDecimal sqft;
 
-    /**
-     * Unit used for the W/O Qty (Sqft) column.
-     * "sqft" = values entered directly in sqft (no conversion).
-     * "sqm"  = values entered in sqm; converted to sqft by × 10.764.
-     */
     @Column(name = "wo_qty_unit", length = 10)
     private String woQtyUnit;
 
-    /**
-     * The raw W/O Qty value as entered by the user (before unit conversion).
-     * Stored as a string to preserve exactly what was typed.
-     */
     @Column(name = "wo_qty_sqft_raw", length = 50)
     private String woQtySqftRaw;
 
-    /**
-     * W/O Qty converted to sqft.
-     * If woQtyUnit = "sqm" → raw × 10.764; if "sqft" → raw as-is.
-     */
     @Column(name = "wo_qty_sqft", precision = 12, scale = 4)
     private BigDecimal woQtySqft;
 
-    /**
-     * W/O QTY in Nos — integer count.
-     * Calculated as: floor(woQtySqft / sqft).
-     * Stored as BigDecimal for JPA compatibility; always a whole number.
-     */
     @Column(name = "wo_qty_nos", precision = 10, scale = 0)
     private BigDecimal woQtyNos;
 
     @Column(name = "floor_plan_qty", precision = 10, scale = 4)
     private BigDecimal floorPlanQty;
+
+    // ── NEW FIELD ─────────────────────────────────────────────────────────────
+    @Column(name = "qty_as_per_floor_plan", precision = 10, scale = 4)
+    private BigDecimal qtyAsPerFloorPlan;
 }

@@ -1,4 +1,5 @@
 
+
 package onedeoleela.onedeoleela.Coordinator.Service;
 
 import onedeoleela.onedeoleela.Coordinator.DTO.WorkOrderDTO;
@@ -31,26 +32,22 @@ public class WorkOrderService {
         item.setWindowCode(i.getWindowCode());
         item.setTypology(i.getTypology());
         item.setSeries(i.getSeries());
-
         item.setLength(i.getLength());
         item.setHeight(i.getHeight());
 
-        // ── Server-side sqft verification ─────────────────────────────────────
-        // Formula: L(mm) × H(mm) ÷ 1,000,000 × 10.764
-        // Re-calculate on the server and use the server value as source of truth.
+        // Server-side sqft recalculation
         if (i.getLength() != null && i.getHeight() != null) {
             BigDecimal serverSqft = SqftConverter.convertMm(i.getLength(), i.getHeight());
             item.setSqft(serverSqft);
         } else {
-            item.setSqft(i.getSqft()); // fallback: trust frontend value
+            item.setSqft(i.getSqft());
         }
 
-        // ── W/O Qty unit & conversion ─────────────────────────────────────────
+        // W/O Qty unit & conversion
         String woQtyUnit = i.getWoQtyUnit() != null ? i.getWoQtyUnit() : "sqft";
         item.setWoQtyUnit(woQtyUnit);
         item.setWoQtySqftRaw(i.getWoQtySqftRaw());
 
-        // Re-calculate the converted woQtySqft on the server as well
         if (i.getWoQtySqftRaw() != null && !i.getWoQtySqftRaw().isBlank()) {
             try {
                 BigDecimal rawVal = new BigDecimal(i.getWoQtySqftRaw().trim());
@@ -59,7 +56,6 @@ public class WorkOrderService {
                         : rawVal.setScale(4, RoundingMode.HALF_UP);
                 item.setWoQtySqft(converted);
 
-                // Re-calculate W/O QTY (Nos) = floor(woQtySqft / sqft)
                 if (item.getSqft() != null && item.getSqft().compareTo(BigDecimal.ZERO) > 0) {
                     BigDecimal nos = converted.divide(item.getSqft(), 0, RoundingMode.FLOOR);
                     item.setWoQtyNos(nos);
@@ -67,7 +63,6 @@ public class WorkOrderService {
                     item.setWoQtyNos(i.getWoQtyNos());
                 }
             } catch (NumberFormatException ex) {
-                // If raw value is not parseable, fall back to frontend-computed values
                 item.setWoQtySqft(i.getWoQtySqft());
                 item.setWoQtyNos(i.getWoQtyNos());
             }
@@ -77,6 +72,10 @@ public class WorkOrderService {
         }
 
         item.setFloorPlanQty(i.getFloorPlanQty());
+
+        // ── NEW: save qtyAsPerFloorPlan ───────────────────────────────────────
+        item.setQtyAsPerFloorPlan(i.getQtyAsPerFloorPlan());
+
         item.setWorkOrder(wo);
         return item;
     }
@@ -91,6 +90,7 @@ public class WorkOrderService {
         WorkOrder wo = new WorkOrder();
         wo.setWorkOrderNo(dto.getWorkOrderNo());
         wo.setProjectName(dto.getProjectName());
+        wo.setTowerName(dto.getTowerName());   // ── NEW ──
         wo.setDate(dto.getDate());
 
         if (dto.getItems() != null) {
@@ -104,36 +104,17 @@ public class WorkOrderService {
     }
 
     // ── UPDATE ────────────────────────────────────────────────────────────────
-//    @Transactional
-//    public WorkOrder update(Long id, WorkOrderDTO dto) {
-//        WorkOrder wo = repository.findById(id)
-//                .orElseThrow(() -> new IllegalArgumentException("Work Order not found: " + id));
-//
-//        wo.setProjectName(dto.getProjectName());
-//        wo.setDate(dto.getDate());
-//
-//        if (dto.getItems() != null) {
-//            List<WorkOrderItem> items = dto.getItems().stream()
-//                    .map(i -> mapItem(i, wo))
-//                    .collect(Collectors.toList());
-//            wo.setItems(items);
-//        }
-//
-//        return repository.save(wo);
-//    }
-
-    // ── UPDATE ────────────────────────────────────────────────────────────────
     @Transactional
     public WorkOrder update(Long id, WorkOrderDTO dto) {
         WorkOrder wo = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Work Order not found: " + id));
 
         wo.setProjectName(dto.getProjectName());
+        wo.setTowerName(dto.getTowerName());    // ── NEW ──
         wo.setDate(dto.getDate());
 
         if (dto.getItems() != null) {
-            // ✅ NEVER replace the collection reference with orphanRemoval=true
-            // Clear the existing list and re-add new items into the SAME list
+            // ✅ Fix orphan deletion bug — clear and re-add, never reassign
             wo.getItems().clear();
 
             List<WorkOrderItem> newItems = dto.getItems().stream()
