@@ -401,8 +401,8 @@ export default function WorkOrdersPage() {
                                     </span>
                                 </div>
                                 <div style={s.projMeta}>
-                                    <span>📍 {p.city || "—"}</span>
-                                    <span>👤 {p.projectManager || "—"}</span>
+                                    <span>{p.city || "—"}</span>
+                                    <span> {p.projectManager || "—"}</span>
                                 </div>
                             </div>
                         ))}
