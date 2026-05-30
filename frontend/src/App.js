@@ -1,155 +1,16 @@
 //
 //
-//
-//
-//import { BrowserRouter, Routes, Route } from "react-router-dom";
-//
-//// Public
-//import LoginPage from "./pages/LoginPage";
-//
-////Coordinator page
-//import FloorFlatManager from "./Module/Coordinator/Pages/FloorFlatManager";
-//import ProjectManagerPage from "./Module/Coordinator/Pages/ProjectManagerPage";
-//import UserVehicleRequestPage from "./Module/Common/Uservehiclerequestpage";
-//
-//// Admin & VP & Driver
-//import AdminDashboard from "./pages/AdminDashboard";
-//import VPDashboard from "./pages/VPDashboard";
-//import DriverDashboard from "./pages/DriverDashboard";
-//import VehicleMonitoringPage from "./Module/Dispatch/Pages/VehicleMonitoringPage";
-//import PlanningDashboard from "./pages/PlanningDashboard";
-//import PAAppointmentPage from "./pages/PAAppointmentPage";
-//import BossAppointmentPage from "./pages/BossAppointmentPage";
-//
-//// Dispatch
-//import DispatchHome from "./Module/Dispatch/Pages/DispatchHome";
-//import DispatchDashboard from "./Module/Dispatch/Pages/DispatchDashboard";
-//import AddRoute from "./Module/Dispatch/Pages/AddRoute";
-//import ViewRoutes from "./Module/Dispatch/Pages/ViewRoutes";
-//import Drivers from "./Module/Dispatch/Pages/Drivers";
-//import VehicleStatusImages from "./Module/Dispatch/Pages/VehicleStatusImages";
-//import CancellationInfo from "./Module/Dispatch/Pages/CancellationInfo";
-//import VehiclePortalPage from "./Module/Dispatch/Pages/VehiclePortalPage";
-//import WindowManagerPage from "./Module/Dispatch/Pages/WindowManagerPage";
-//import BulkUploadWindowPage from "./Module/Dispatch/Pages/BulkUploadWindowPage"; // adjust path if needed
-//import ItemDCPage from "./Module/Dispatch/Pages/ItemDCPage";
-//import DispatchReport from "./Module/Dispatch/Pages/DispatchReport";
-//import DailyReports from "./Module/Dispatch/Pages/DailyReports";
-//import DispatchRequestPage from "./Module/Dispatch/Pages/DispatchRequestPage";
-//// Other Dashboards
-//import ProductionDashboard from "./pages/ProductionDashbaord";
-//import SiteSupervisorDashboard from "./pages/SiteSupervisorDashboard";
-//import PurchaseDashboard from "./pages/PurchaseDashboard";
-//import CoordinatorDashboard from "./pages/CoordinatorDashboad";
-//import PowderCoatingDashboard from "./pages/PowderCoatingDashboard";
-//
-//// Vehicle Requisition
-//import AddVehicleRequisition from "./Module/Requisition/Pages/AddVehicleRequisition";
-//import VehicleRequisitionList from "./Module/Requisition/Pages/VehicleRequisitionList";
-//import LiveTrackingPage from "./Module/Dispatch/Pages/LiveTrackingPage";
-//import VehicleExpensesPage from "./Module/Dispatch/Pages/VehicleExpensesPage";
-//import TripHistoryPage from "./Module/Dispatch/Pages/TripHistoryPage";
-//import ActiveVehiclePage from "./Module/Dispatch/Pages/ActiveVehiclePage";
-//import InactiveVehiclePage from "./Module/Dispatch/Pages/InActiveVehiclePage";
-//
-//function App() {
-//    return (
-//        <BrowserRouter>
-//            <Routes>
-//
-//                {/* Public */}
-//                <Route path="/" element={<LoginPage />} />
-//
-//                {/* Admin */}
-//                <Route path="/admin-dashboard" element={<AdminDashboard />} />
-//                <Route path="/planning-dashboard" element={<PlanningDashboard />} />
-//                {/* VP */}
-//                <Route path="/vp-dashboard" element={<VPDashboard />} />
-//
-//                {/* Driver */}
-//                <Route path="/driver-dashboard" element={<DriverDashboard />} />
-//               <Route path="boss-appointments" element={<BossAppointmentPage />} />
-//               <Route path="pa-appointments" element={<PAAppointmentPage />} />
-//                {/* Dispatch Layout */}
-//                <Route path="/dispatch-dashboard" element={<DispatchHome />}>
-//                    <Route path="vehicles" element={<DispatchDashboard />} />
-//                    <Route path="active-vehicles" element={<ActiveVehiclePage />} />
-//                    <Route path="inactive-vehicles" element={<InactiveVehiclePage />} />
-//                    <Route path="routes/add" element={<AddRoute />} />
-//                    <Route path="routes" element={<ViewRoutes />} />
-//                    <Route path="routes/history/:tripId" element={<TripHistoryPage />} />
-//                    <Route path="vehicle-portal" element={<VehiclePortalPage />} />
-//                    <Route path="drivers" element={<Drivers />} />
-//                    <Route path="vehicle-status-images" element={<VehicleStatusImages />} />
-//                    <Route path="live-tracking" element={<LiveTrackingPage />} />
-//                    <Route path="expenses" element={<VehicleExpensesPage />} />
-//
-//                    {/* Absolute paths kept as-is */}
-//                    <Route path="/dispatch-dashboard/vehicle-monitoring" element={<VehicleMonitoringPage />} />
-//                    <Route path="/dispatch-dashboard/routes/cancellation/:id" element={<CancellationInfo />} />
-//                    <Route path="/dispatch-dashboard/window-dc" element={<WindowManagerPage />} />
-//                    <Route
-//                      path="/dispatch-dashboard/bulk-upload-window"
-//                      element={<BulkUploadWindowPage />}
-//                    />
-//                    <Route path="material-dc" element={<ItemDCPage />} />
-//                   <Route
-//                     path="/dispatch-dashboard/dispatch-report"
-//                     element={<DispatchReport/>}
-//                   />
-//                   <Route path="daily-reports" element={<DailyReports />} />
-//                    <Route
-//                      path="/dispatch-dashboard/vehicle-requests"
-//                      element={<DispatchRequestPage />}
-//                    />
-//                </Route>
-//
-//                {/* Other Dashboards */}
-//                <Route path="production-dashboard" element={<ProductionDashboard />} />
-//                <Route path="purchase-dashboard" element={<PurchaseDashboard />} />
-//                <Route path="site_supervisor-dashboard" element={<SiteSupervisorDashboard />} />
-//
-//                {/* ✅ FIXED: Coordinator with nested routes */}
-//                <Route path="coordinator-dashboard" element={<CoordinatorDashboard />}>
-//                    <Route path="projects" element={<ProjectManagerPage />} />
-//                    <Route path="floor-flat" element={<FloorFlatManager />} />
-//                    <Route path="planning/create" element={<AddVehicleRequisition />} />
-//                    <Route path="planning/view" element={<VehicleRequisitionList />} />
-//                  <Route
-//                    path="vehicle-requests"
-//                    element={<UserVehicleRequestPage />}
-//                  />
-//                </Route>
-//
-//                <Route path="powder_coating-dashboard" element={<PowderCoatingDashboard />} />
-//
-//                {/* (Optional future routes) */}
-//
-//                <Route path="/vehicle-requisition" element={<AddVehicleRequisition />} />
-//                <Route path="/vehicle-requisition-list" element={<VehicleRequisitionList />} />
-//
-//
-//            </Routes>
-//        </BrowserRouter>
-//    );
-//}
-//
-//export default App;
-
-//
-//
 //import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 //
 //// Public
 //import LoginPage from "./pages/LoginPage";
 //
-//// Coordinator page
+//// Coordinator pages
 //import FloorFlatManager from "./Module/Coordinator/Pages/FloorFlatManager";
 //import ProjectManagerPage from "./Module/Coordinator/Pages/ProjectManagerPage";
 //import UserVehicleRequestPage from "./Module/Common/Uservehiclerequestpage";
-//import WorkOrderPage from "./Module/Coordinator/Pages/WorkOrderPage";
-//import WorkOrderListPage from "./Module/Coordinator/Pages/WorkOrderListPage";
-//import WorkOrderFormPage from "./Module/Coordinator/Pages/WorkOrderFormPage";
+//import WorkOrdersPage from "./Module/Coordinator/Pages/WorkOrdersPage";       // project list + WO list
+//import WorkOrderFormPage from "./Module/Coordinator/Pages/WorkOrderFormPage"; // create + edit (unified)
 //
 //// Admin & VP & Driver
 //import AdminDashboard from "./pages/AdminDashboard";
@@ -192,36 +53,20 @@
 //import ActiveVehiclePage from "./Module/Dispatch/Pages/ActiveVehiclePage";
 //import InactiveVehiclePage from "./Module/Dispatch/Pages/InActiveVehiclePage";
 //
-//// ── Notification Widget ────────────────────────────────────────────────────────
+//// Notification Widget
 //import NotificationWidget from "./Module/Boss/NotificationWidget";
 //
-//// ─────────────────────────────────────────────────────────────────────────────
-//// Routes where the widget should NOT appear:
-////   - Login page ("/")
-////   - Driver dashboard (they don't handle appointments)
-//// ─────────────────────────────────────────────────────────────────────────────
 //function WidgetGate() {
 //    const stored = localStorage.getItem("user");
 //    const user   = stored ? JSON.parse(stored) : null;
-//
-//    // ✅ Widget ONLY shows if role is exactly BOSS
 //    if (user?.role !== "BOSS") return null;
-//
 //    return <NotificationWidget />;
 //}
 //
-//// ─────────────────────────────────────────────────────────────────────────────
 //function App() {
 //    return (
 //        <BrowserRouter>
-//            {/*
-//              WidgetGate must be INSIDE BrowserRouter so it can call useLocation().
-//              It renders the floating widget on every page except those in
-//              WIDGET_HIDDEN_PATHS. The widget itself is position:fixed so it
-//              sits above all page content without affecting any layouts.
-//            */}
 //            <WidgetGate />
-//
 //            <Routes>
 //                {/* Public */}
 //                <Route path="/" element={<LoginPage />} />
@@ -233,62 +78,62 @@
 //                {/* VP */}
 //                <Route path="/vp-dashboard" element={<VPDashboard />} />
 //
-//                {/* Driver — widget hidden on this route (see WIDGET_HIDDEN_PATHS) */}
+//                {/* Driver */}
 //                <Route path="/driver-dashboard" element={<DriverDashboard />} />
 //
 //                {/* Appointments */}
 //                <Route path="/boss-appointments" element={<BossAppointmentPage />} />
 //                <Route path="/pa-appointments"   element={<PAAppointmentPage />} />
 //
-//                {/* Dispatch Layout */}
+//                {/* Dispatch */}
 //                <Route path="/dispatch-dashboard" element={<DispatchHome />}>
-//                    <Route path="vehicles"                  element={<DispatchDashboard />} />
-//                    <Route path="active-vehicles"           element={<ActiveVehiclePage />} />
-//                    <Route path="inactive-vehicles"         element={<InactiveVehiclePage />} />
-//                    <Route path="routes/add"                element={<AddRoute />} />
-//                    <Route path="routes"                    element={<ViewRoutes />} />
-//                    <Route path="routes/history/:tripId"    element={<TripHistoryPage />} />
-//                    <Route path="vehicle-portal"            element={<VehiclePortalPage />} />
-//                    <Route path="drivers"                   element={<Drivers />} />
-//                    <Route path="vehicle-status-images"     element={<VehicleStatusImages />} />
-//                    <Route path="live-tracking"             element={<LiveTrackingPage />} />
-//                    <Route path="expenses"                  element={<VehicleExpensesPage />} />
-//                    <Route path="material-dc"               element={<ItemDCPage />} />
-//                    <Route path="daily-reports"             element={<DailyReports />} />
-//
-//                    {/* Absolute paths kept as-is */}
-//                    <Route path="/dispatch-dashboard/vehicle-monitoring"             element={<VehicleMonitoringPage />} />
-//                    <Route path="/dispatch-dashboard/routes/cancellation/:id"        element={<CancellationInfo />} />
-//                    <Route path="/dispatch-dashboard/window-dc"                      element={<WindowManagerPage />} />
-//                    <Route path="/dispatch-dashboard/bulk-upload-window"             element={<BulkUploadWindowPage />} />
-//                    <Route path="/dispatch-dashboard/dispatch-report"                element={<DispatchReport />} />
-//                    <Route path="/dispatch-dashboard/vehicle-requests"               element={<DispatchRequestPage />} />
+//                    <Route path="vehicles"               element={<DispatchDashboard />} />
+//                    <Route path="active-vehicles"        element={<ActiveVehiclePage />} />
+//                    <Route path="inactive-vehicles"      element={<InactiveVehiclePage />} />
+//                    <Route path="routes/add"             element={<AddRoute />} />
+//                    <Route path="routes"                 element={<ViewRoutes />} />
+//                    <Route path="routes/history/:tripId" element={<TripHistoryPage />} />
+//                    <Route path="vehicle-portal"         element={<VehiclePortalPage />} />
+//                    <Route path="drivers"                element={<Drivers />} />
+//                    <Route path="vehicle-status-images"  element={<VehicleStatusImages />} />
+//                    <Route path="live-tracking"          element={<LiveTrackingPage />} />
+//                    <Route path="expenses"               element={<VehicleExpensesPage />} />
+//                    <Route path="material-dc"            element={<ItemDCPage />} />
+//                    <Route path="daily-reports"          element={<DailyReports />} />
+//                    <Route path="/dispatch-dashboard/vehicle-monitoring"          element={<VehicleMonitoringPage />} />
+//                    <Route path="/dispatch-dashboard/routes/cancellation/:id"     element={<CancellationInfo />} />
+//                    <Route path="/dispatch-dashboard/window-dc"                   element={<WindowManagerPage />} />
+//                    <Route path="/dispatch-dashboard/bulk-upload-window"          element={<BulkUploadWindowPage />} />
+//                    <Route path="/dispatch-dashboard/dispatch-report"             element={<DispatchReport />} />
+//                    <Route path="/dispatch-dashboard/vehicle-requests"            element={<DispatchRequestPage />} />
 //                </Route>
 //
 //                {/* Other Dashboards */}
-//                <Route path="/production-dashboard"        element={<ProductionDashboard />} />
-//                <Route path="/purchase-dashboard"          element={<PurchaseDashboard />} />
-//                <Route path="/site_supervisor-dashboard"   element={<SiteSupervisorDashboard />} />
-//                <Route path="/powder_coating-dashboard"    element={<PowderCoatingDashboard />} />
+//                <Route path="/production-dashboard"      element={<ProductionDashboard />} />
+//                <Route path="/purchase-dashboard"        element={<PurchaseDashboard />} />
+//                <Route path="/site_supervisor-dashboard" element={<SiteSupervisorDashboard />} />
+//                <Route path="/powder_coating-dashboard"  element={<PowderCoatingDashboard />} />
 //
-//                {/* Coordinator with nested routes */}
+//                {/* ── Coordinator ─────────────────────────────────────────── */}
 //                <Route path="/coordinator-dashboard" element={<CoordinatorDashboard />}>
-//                    <Route path="projects"       element={<ProjectManagerPage />} />
-//                    <Route path="floor-flat"     element={<FloorFlatManager />} />
-//                    <Route path="planning/create" element={<AddVehicleRequisition />} />
-//                    <Route path="planning/view"  element={<VehicleRequisitionList />} />
+//                    <Route path="projects"         element={<ProjectManagerPage />} />
+//                    <Route path="floor-flat"       element={<FloorFlatManager />} />
+//                    <Route path="planning/create"  element={<AddVehicleRequisition />} />
+//                    <Route path="planning/view"    element={<VehicleRequisitionList />} />
 //                    <Route path="vehicle-requests" element={<UserVehicleRequestPage />} />
-//                      <Route path="work-orders"         element={<WorkOrderListPage />} />
-//                        <Route path="work-orders/create"  element={<WorkOrderFormPage />} />
-//                        <Route path="work-orders/:id"     element={<WorkOrderFormPage />} />
-//                    <Route
-//                      path="/coordinator-dashboard/work-orders"
-//                      element={<WorkOrderPage />}
-//                    />
 //
+//                    {/*
+//                      Work Order routes — three distinct paths:
+//                        /work-orders          → project list + existing WO list
+//                        /work-orders/create   → create new WO (with AI/PDF panel)
+//                        /work-orders/:id/edit → edit existing WO (loads data, no AI panel)
+//                    */}
+//                    <Route path="work-orders"          element={<WorkOrdersPage />} />
+//                    <Route path="work-orders/create"   element={<WorkOrderFormPage />} />
+//                    <Route path="work-orders/:id/edit" element={<WorkOrderFormPage />} />
 //                </Route>
 //
-//                {/* Vehicle Requisition (standalone) */}
+//                {/* Vehicle Requisition standalone */}
 //                <Route path="/vehicle-requisition"      element={<AddVehicleRequisition />} />
 //                <Route path="/vehicle-requisition-list" element={<VehicleRequisitionList />} />
 //            </Routes>
@@ -307,8 +152,11 @@ import LoginPage from "./pages/LoginPage";
 import FloorFlatManager from "./Module/Coordinator/Pages/FloorFlatManager";
 import ProjectManagerPage from "./Module/Coordinator/Pages/ProjectManagerPage";
 import UserVehicleRequestPage from "./Module/Common/Uservehiclerequestpage";
-import WorkOrdersPage from "./Module/Coordinator/Pages/WorkOrdersPage";       // project list + WO list
-import WorkOrderFormPage from "./Module/Coordinator/Pages/WorkOrderFormPage"; // create + edit (unified)
+import WorkOrdersPage from "./Module/Coordinator/Pages/WorkOrdersPage";
+import WorkOrderFormPage from "./Module/Coordinator/Pages/WorkOrderFormPage";
+import TrackerPage from "./Module/Coordinator/Pages/TrackerPage";
+import InfoSheetListPage from "./Module/Coordinator/Pages/InfoSheetListPage";
+import InfoSheetFormPage from "./Module/Coordinator/Pages/InfoSheetFormPage";
 
 // Admin & VP & Driver
 import AdminDashboard from "./pages/AdminDashboard";
@@ -420,15 +268,22 @@ function App() {
                     <Route path="planning/view"    element={<VehicleRequisitionList />} />
                     <Route path="vehicle-requests" element={<UserVehicleRequestPage />} />
 
-                    {/*
-                      Work Order routes — three distinct paths:
-                        /work-orders          → project list + existing WO list
-                        /work-orders/create   → create new WO (with AI/PDF panel)
-                        /work-orders/:id/edit → edit existing WO (loads data, no AI panel)
-                    */}
+                    {/* Work Orders */}
                     <Route path="work-orders"          element={<WorkOrdersPage />} />
                     <Route path="work-orders/create"   element={<WorkOrderFormPage />} />
                     <Route path="work-orders/:id/edit" element={<WorkOrderFormPage />} />
+
+                    {/*
+                      Tracker routes:
+                        /tracker                                    → project + WO selector
+                        /tracker/:workOrderId/sheets                → list of info sheets for a WO
+                        /tracker/:workOrderId/sheets/create         → create new info sheet
+                        /tracker/:workOrderId/sheets/:id/edit       → edit existing info sheet
+                    */}
+                    <Route path="tracker"                                       element={<TrackerPage />} />
+                    <Route path="tracker/:workOrderId/sheets"                   element={<InfoSheetListPage />} />
+                    <Route path="tracker/:workOrderId/sheets/create"            element={<InfoSheetFormPage />} />
+                    <Route path="tracker/:workOrderId/sheets/:id/edit"          element={<InfoSheetFormPage />} />
                 </Route>
 
                 {/* Vehicle Requisition standalone */}
