@@ -296,6 +296,9 @@
 //
 //export default App;
 
+
+
+
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 
 // Public
@@ -309,6 +312,7 @@ import WorkOrdersPage from "./Module/Coordinator/Pages/WorkOrdersPage";
 import WorkOrderFormPage from "./Module/Coordinator/Pages/WorkOrderFormPage";
 import TrackerPage from "./Module/Coordinator/Pages/TrackerPage";
 import InfoSheetFormPage from "./Module/Coordinator/Pages/InfoSheetFormPage";
+import TrackerFormPage from "./Module/Coordinator/Pages/TrackerFormPage";
 
 // Admin & VP & Driver
 import AdminDashboard from "./pages/AdminDashboard";
@@ -434,6 +438,7 @@ function App() {
                     <Route path="tracker"                                       element={<TrackerPage />} />
                     <Route path="tracker/:workOrderId/sheets/create"            element={<InfoSheetFormPage />} />
                     <Route path="tracker/:workOrderId/sheets/:id/edit"          element={<InfoSheetFormPage />} />
+                    <Route path="production-tracker" element={<TrackerFormPage />} />
                 </Route>
 
                 {/* Vehicle Requisition standalone */}
