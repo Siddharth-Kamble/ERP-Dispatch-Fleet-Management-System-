@@ -5,6 +5,7 @@ import onedeoleela.onedeoleela.Entity.ProjectRecords;
 import onedeoleela.onedeoleela.Service.ProjectRecordsService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -78,6 +79,35 @@ public class ProjectRecordsController {
 
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
+        }
+    }
+    @PutMapping("/{recordId}")
+    public ResponseEntity<?> updateRecord(
+            @PathVariable Long recordId,
+            @RequestBody ProjectRecords updatedRecord) {
+        try {
+            ProjectRecords saved = recordsService.updateRecord(recordId, updatedRecord);
+            return ResponseEntity.ok(saved);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/filter")
+    public ResponseEntity<List<ProjectRecords>> getRecordsByDateOnly(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ResponseEntity.ok(
+                recordsService.getRecordsByDateRange(startDate, endDate)
+        );
+    }
+    @DeleteMapping("/{recordId}")
+    public ResponseEntity<?> deleteRecord(@PathVariable Long recordId) {
+        try {
+            recordsService.deleteRecord(recordId);
+            return ResponseEntity.ok("Record deleted successfully");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
 }

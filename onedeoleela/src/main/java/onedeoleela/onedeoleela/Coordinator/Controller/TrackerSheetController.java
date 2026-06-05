@@ -56,8 +56,7 @@ public class TrackerSheetController {
         }
     }
 
-    // GET /api/tracker-sheets/by-work-order/{workOrderId}
-    // Returns the tracker sheet for a WO if it exists, or 404
+
     @GetMapping("/by-work-order/{workOrderId}")
     public ResponseEntity<?> getByWorkOrder(@PathVariable Long workOrderId) {
         Optional<TrackerSheet> sheet = service.getByWorkOrder(workOrderId);

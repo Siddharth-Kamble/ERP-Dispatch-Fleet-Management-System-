@@ -156,7 +156,7 @@ function CoordinatorDashboard() {
                 <header style={styles.header}>
                     <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
                         <FaBars color="#64748b" />
-                        <span style={styles.title}>{departmentName} Module</span>
+                        <span style={styles.title}>{departmentName} MODULE</span>
                     </div>
                     <div style={styles.userBadge}>{user?.fullName}</div>
                 </header>

@@ -35,7 +35,7 @@ public class ProjectRecords {
 
     private String dayOfWeek; // ✅ auto-filled
 
-    @OneToMany(mappedBy = "projectRecord", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "projectRecord", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Material> materials;
 
     // ✅ AUTO DAY LOGIC

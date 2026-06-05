@@ -200,4 +200,38 @@ public class ProjectRecordsService {
         document.close();
         return baos.toByteArray();
     }
+
+    public ProjectRecords updateRecord(Long recordId, ProjectRecords updated) {
+        ProjectRecords existing = recordsRepository.findById(recordId)
+                .orElseThrow(() -> new RuntimeException("Record not found: " + recordId));
+
+        existing.setSqft(updated.getSqft());
+        existing.setJobCardNo(updated.getJobCardNo());
+        existing.setDcNo(updated.getDcNo());
+        existing.setRemark(updated.getRemark());
+        existing.setVehicleDriver(updated.getVehicleDriver());
+        existing.setDriver(updated.getDriver());
+        existing.setRecordDate(updated.getRecordDate());
+
+        // Clear old materials and replace with new ones
+        existing.getMaterials().clear();
+        if (updated.getMaterials() != null) {
+            for (Material m : updated.getMaterials()) {
+                m.setProjectRecord(existing);
+                existing.getMaterials().add(m);
+            }
+        }
+
+        return recordsRepository.save(existing);
+    }
+    public List<ProjectRecords> getRecordsByDateRange(LocalDate startDate, LocalDate endDate) {
+        return recordsRepository.findByRecordDateBetweenOrderByRecordDateAsc(startDate, endDate);
+    }
+
+    public void deleteRecord(Long recordId) {
+        if (!recordsRepository.existsById(recordId)) {
+            throw new RuntimeException("Record not found: " + recordId);
+        }
+        recordsRepository.deleteById(recordId);
+    }
 }
