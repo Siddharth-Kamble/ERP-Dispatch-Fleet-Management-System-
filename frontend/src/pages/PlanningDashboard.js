@@ -611,6 +611,7 @@ export default function PlanningDashboard({ onBack }) {
 
   const [notifications, setNotifications] = useState([]);
   const [dismissedNotifs, setDismissedNotifs] = useState(new Set());
+  const [recentProjects, setRecentProjects] = useState([]);
 
   // ── Download modal state ───────────────────────────────────────────────────
   const [downloadModal, setDownloadModal] = useState(null);
@@ -896,8 +897,15 @@ const confirmDayChange = async () => {
     } catch { showToast("Failed to load revisions", "error"); }
   };
 
-  const goToWorks     = (project) => { setSelProject(project); setSelWork(null); setActiveNav("works"); };
-  const goToLineItems = (work)    => { setSelWork(work); setActiveNav("lineItems"); };
+const goToWorks = (project) => {
+  setSelProject(project);
+  setSelWork(null);
+  setActiveNav("works");
+  setRecentProjects(prev => {
+    const filtered = prev.filter(p => p.projectId !== project.projectId);
+    return [project, ...filtered].slice(0, 3);
+  });
+};  const goToLineItems = (work)    => { setSelWork(work); setActiveNav("lineItems"); };
 
   const filteredProjects = projects.filter(p =>
     !searchTerm ||
@@ -1071,11 +1079,11 @@ const confirmDayChange = async () => {
               </div>
             )}
 
-            {projects.length > 0 && (
+            {recentProjects.length > 0 && (
               <div>
-                <SectionTitle>Recent Projects</SectionTitle>
+                <SectionTitle>🕐 Recently Opened Projects</SectionTitle>
                 <div style={S.cardGrid}>
-                  {projects.slice(0, 4).map(p => (
+                  {recentProjects.map(p => (
                     <ProjectCard key={p.projectId} p={p}
                       onOpen={() => goToWorks(p)}
                       onHistory={() => loadHistory("project", p.projectId, `Project: ${p.projectName}`)} />

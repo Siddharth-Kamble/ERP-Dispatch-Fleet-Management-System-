@@ -144,7 +144,7 @@ function CoordinatorDashboard() {
                     style={activeMenu("/coordinator-dashboard/production-tracker")}
                     onClick={() => { setActivePage("other"); navigate("/coordinator-dashboard/production-tracker"); }}
                 >
-                    <FaIndustry style={styles.icon}/> Production Tracker
+                    <FaIndustry style={styles.icon}/> Project Tracker
                 </button>
                 <button style={styles.logout} onClick={handleLogout}>
                     <FaSignOutAlt style={styles.icon}/> Logout
@@ -226,7 +226,7 @@ function CoordinatorDashboard() {
                                         <div style={{ fontSize: 30, color: "#f59e0b", marginBottom: 15 }}>
                                             <FaIndustry />
                                         </div>
-                                        <h3>Production Tracker</h3>
+                                        <h3>Project Tracker</h3>
                                         <p style={{ fontSize: "14px", color: "#64748b" }}>
                                             Frame, Supply & Installation Job Cards
                                         </p>
