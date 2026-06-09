@@ -1,5 +1,6 @@
 package onedeoleela.onedeoleela.Coordinator.Entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,17 +13,21 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+
 @Entity
 @Table(name = "tracker_sheets")
 public class TrackerSheet {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     // Linked to work order — one tracker sheet per WO
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "work_order_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private WorkOrder workOrder;
 
     // Auto-filled from WO
