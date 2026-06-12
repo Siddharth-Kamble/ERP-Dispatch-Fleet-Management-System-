@@ -182,6 +182,90 @@
 //    @Column(name = "handover_status", length = 100) private String handoverStatus;
 //    @Column(name = "dc_no",           length = 50)  private String dcNo;
 //}
+//
+//package onedeoleela.onedeoleela.Coordinator.Entity;
+//
+//import com.fasterxml.jackson.annotation.JsonIgnore;
+//import jakarta.persistence.*;
+//import lombok.*;
+//
+//import java.math.BigDecimal;
+//
+//@Data
+//@Getter
+//@Setter
+//@AllArgsConstructor
+//@NoArgsConstructor
+//@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+//@Entity
+//@Table(name = "tracker_sheet_rows")
+//public class TrackerSheetRow {
+//
+//    @Id
+//    @GeneratedValue(strategy = GenerationType.IDENTITY)
+//    @EqualsAndHashCode.Include
+//     private Long id;
+//
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "tracker_sheet_id", nullable = false)
+//    @JsonIgnore
+//    private TrackerSheet trackerSheet;
+//
+//    // ── Auto-filled from WO ───────────────────────────────────────────────────
+//    @Column(name = "sr_no")    private String srNo;
+//    @Column(name = "flat")     private String flat;
+//    @Column(name = "location") private String location;
+//    @Column(name = "wcode")    private String wcode;
+//    @Column(name = "typology") private String typology;
+//    @Column(name = "series")   private String series;
+//
+//    @Column(name = "wo_lnt", precision = 10, scale = 4) private BigDecimal woLnt;
+//    @Column(name = "wo_hgt", precision = 10, scale = 4) private BigDecimal woHgt;
+//    @Column(name = "sqft",   precision = 12, scale = 4) private BigDecimal sqft;
+//
+//    // ── User filled ───────────────────────────────────────────────────────────
+//    @Column(name = "length",   precision = 10, scale = 4) private BigDecimal length;
+//    @Column(name = "height",   precision = 10, scale = 4) private BigDecimal height;
+//    @Column(name = "job_card", length = 100)              private String     jobCard;
+//
+//    // ── DC.NO sub-columns (6) ─────────────────────────────────────────────────
+//    @Column(name = "dcno_frame",          precision = 10, scale = 4) private BigDecimal dcnoFrame;
+//    @Column(name = "dcno_door_frame",     precision = 10, scale = 4) private BigDecimal dcnoDoorFrame;
+//    @Column(name = "dcno_shutter",        precision = 10, scale = 4) private BigDecimal dcnoShutter;
+//    @Column(name = "dcno_openable_door",  precision = 10, scale = 4) private BigDecimal dcnoOpenableDoor;
+//    @Column(name = "dcno_fix_glass",      precision = 10, scale = 4) private BigDecimal dcnoFixGlass;
+//    @Column(name = "dcno_top_bottom_fix", precision = 10, scale = 4) private BigDecimal dcnoTopBottomFix;
+//
+//    // ── STATUS sub-columns (6) — user enters R or I, drives SUPPLY/INSTALL ────
+//    // HARDWARE dropped from STATUS
+//    @Column(name = "status_frame",          length = 5) private String statusFrame;
+//    @Column(name = "status_door_frame",     length = 5) private String statusDoorFrame;
+//    @Column(name = "status_shutter",        length = 5) private String statusShutter;
+//    @Column(name = "status_openable_door",  length = 5) private String statusOpenableDoor;
+//    @Column(name = "status_fix_glass",      length = 5) private String statusFixGlass;
+//    @Column(name = "status_top_bottom_fix", length = 5) private String statusTopBottomFix;
+//
+//    // ── SUPPLY sub-columns (6) — auto-filled when STATUS = R ─────────────────
+//    @Column(name = "supply_frame",          precision = 10, scale = 4) private BigDecimal supplyFrame;
+//    @Column(name = "supply_door_frame",     precision = 10, scale = 4) private BigDecimal supplyDoorFrame;
+//    @Column(name = "supply_shutter",        precision = 10, scale = 4) private BigDecimal supplyShutter;
+//    @Column(name = "supply_openable_door",  precision = 10, scale = 4) private BigDecimal supplyOpenableDoor;
+//    @Column(name = "supply_fix_glass",      precision = 10, scale = 4) private BigDecimal supplyFixGlass;
+//    @Column(name = "supply_top_bottom_fix", precision = 10, scale = 4) private BigDecimal supplyTopBottomFix;
+//
+//    // ── INSTALLATION sub-columns (6) — auto-filled when STATUS = I ───────────
+//    @Column(name = "install_frame",          precision = 10, scale = 4) private BigDecimal installFrame;
+//    @Column(name = "install_door_frame",     precision = 10, scale = 4) private BigDecimal installDoorFrame;
+//    @Column(name = "install_shutter",        precision = 10, scale = 4) private BigDecimal installShutter;
+//    @Column(name = "install_openable_door",  precision = 10, scale = 4) private BigDecimal installOpenableDoor;
+//    @Column(name = "install_fix_glass",      precision = 10, scale = 4) private BigDecimal installFixGlass;
+//    @Column(name = "install_top_bottom_fix", precision = 10, scale = 4) private BigDecimal installTopBottomFix;
+//
+//    // ── Extra ─────────────────────────────────────────────────────────────────
+//    @Column(name = "handover_status", length = 100) private String handoverStatus;
+//    @Column(name = "dc_no",           length = 50)  private String dcNo;
+//}
+
 
 package onedeoleela.onedeoleela.Coordinator.Entity;
 
@@ -204,7 +288,7 @@ public class TrackerSheetRow {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
-     private Long id;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tracker_sheet_id", nullable = false)
@@ -236,8 +320,7 @@ public class TrackerSheetRow {
     @Column(name = "dcno_fix_glass",      precision = 10, scale = 4) private BigDecimal dcnoFixGlass;
     @Column(name = "dcno_top_bottom_fix", precision = 10, scale = 4) private BigDecimal dcnoTopBottomFix;
 
-    // ── STATUS sub-columns (6) — user enters R or I, drives SUPPLY/INSTALL ────
-    // HARDWARE dropped from STATUS
+    // ── STATUS sub-columns (6) — user enters R / I / H ────────────────────────
     @Column(name = "status_frame",          length = 5) private String statusFrame;
     @Column(name = "status_door_frame",     length = 5) private String statusDoorFrame;
     @Column(name = "status_shutter",        length = 5) private String statusShutter;
@@ -245,7 +328,7 @@ public class TrackerSheetRow {
     @Column(name = "status_fix_glass",      length = 5) private String statusFixGlass;
     @Column(name = "status_top_bottom_fix", length = 5) private String statusTopBottomFix;
 
-    // ── SUPPLY sub-columns (6) — auto-filled when STATUS = R ─────────────────
+    // ── SUPPLY sub-columns (6) — auto: R/I/H → sqft ──────────────────────────
     @Column(name = "supply_frame",          precision = 10, scale = 4) private BigDecimal supplyFrame;
     @Column(name = "supply_door_frame",     precision = 10, scale = 4) private BigDecimal supplyDoorFrame;
     @Column(name = "supply_shutter",        precision = 10, scale = 4) private BigDecimal supplyShutter;
@@ -253,13 +336,22 @@ public class TrackerSheetRow {
     @Column(name = "supply_fix_glass",      precision = 10, scale = 4) private BigDecimal supplyFixGlass;
     @Column(name = "supply_top_bottom_fix", precision = 10, scale = 4) private BigDecimal supplyTopBottomFix;
 
-    // ── INSTALLATION sub-columns (6) — auto-filled when STATUS = I ───────────
+    // ── INSTALLATION sub-columns (6) — auto: I/H → sqft ─────────────────────
     @Column(name = "install_frame",          precision = 10, scale = 4) private BigDecimal installFrame;
     @Column(name = "install_door_frame",     precision = 10, scale = 4) private BigDecimal installDoorFrame;
     @Column(name = "install_shutter",        precision = 10, scale = 4) private BigDecimal installShutter;
     @Column(name = "install_openable_door",  precision = 10, scale = 4) private BigDecimal installOpenableDoor;
     @Column(name = "install_fix_glass",      precision = 10, scale = 4) private BigDecimal installFixGlass;
     @Column(name = "install_top_bottom_fix", precision = 10, scale = 4) private BigDecimal installTopBottomFix;
+
+    // ── HANDOVER sub-columns (7) — auto: H → sqft (includes HARDWARE) ────────
+    @Column(name = "handover_frame",          precision = 10, scale = 4) private BigDecimal handoverFrame;
+    @Column(name = "handover_door_frame",     precision = 10, scale = 4) private BigDecimal handoverDoorFrame;
+    @Column(name = "handover_shutter",        precision = 10, scale = 4) private BigDecimal handoverShutter;
+    @Column(name = "handover_openable_door",  precision = 10, scale = 4) private BigDecimal handoverOpenableDoor;
+    @Column(name = "handover_fix_glass",      precision = 10, scale = 4) private BigDecimal handoverFixGlass;
+    @Column(name = "handover_top_bottom_fix", precision = 10, scale = 4) private BigDecimal handoverTopBottomFix;
+    @Column(name = "handover_hardware",       precision = 10, scale = 4) private BigDecimal handoverHardware;
 
     // ── Extra ─────────────────────────────────────────────────────────────────
     @Column(name = "handover_status", length = 100) private String handoverStatus;

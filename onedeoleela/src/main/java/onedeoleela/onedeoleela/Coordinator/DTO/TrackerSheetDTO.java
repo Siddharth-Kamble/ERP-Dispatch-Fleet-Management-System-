@@ -155,6 +155,87 @@
 //    }
 //}
 
+//package onedeoleela.onedeoleela.Coordinator.DTO;
+//
+//import lombok.*;
+//
+//import java.math.BigDecimal;
+//import java.time.LocalDate;
+//import java.util.List;
+//
+//@Data
+//@Getter
+//@Setter
+//public class TrackerSheetDTO {
+//
+//    private Long      workOrderId;
+//    private String    projectName;
+//    private String    towerName;
+//    private LocalDate date;
+//    private List<RowDTO> rows;
+//    private BigDecimal handoverHardware;
+//
+//    @Data
+//    @Getter
+//    @Setter
+//    public static class RowDTO {
+//
+//        // Auto-filled from WO
+//        private String     srNo;
+//        private String     flat;
+//        private String     location;
+//        private String     wcode;
+//        private String     typology;
+//        private String     series;
+//        private BigDecimal woLnt;
+//        private BigDecimal woHgt;
+//        private BigDecimal sqft;
+//
+//        // User filled
+//        private BigDecimal length;
+//        private BigDecimal height;
+//        private String     jobCard;
+//
+//        // DC.NO (6 cols) — numeric
+//        private BigDecimal dcnoFrame;
+//        private BigDecimal dcnoDoorFrame;
+//        private BigDecimal dcnoShutter;
+//        private BigDecimal dcnoOpenableDoor;
+//        private BigDecimal dcnoFixGlass;
+//        private BigDecimal dcnoTopBottomFix;
+//
+//        // STATUS (6 cols) — String: user enters "R" or "I"
+//        // HARDWARE dropped from STATUS
+//        private String statusFrame;
+//        private String statusDoorFrame;
+//        private String statusShutter;
+//        private String statusOpenableDoor;
+//        private String statusFixGlass;
+//        private String statusTopBottomFix;
+//
+//        // SUPPLY (6 cols) — auto-filled when STATUS = R
+//        private BigDecimal supplyFrame;
+//        private BigDecimal supplyDoorFrame;
+//        private BigDecimal supplyShutter;
+//        private BigDecimal supplyOpenableDoor;
+//        private BigDecimal supplyFixGlass;
+//        private BigDecimal supplyTopBottomFix;
+//
+//        // INSTALLATION (6 cols) — auto-filled when STATUS = I
+//        private BigDecimal installFrame;
+//        private BigDecimal installDoorFrame;
+//        private BigDecimal installShutter;
+//        private BigDecimal installOpenableDoor;
+//        private BigDecimal installFixGlass;
+//        private BigDecimal installTopBottomFix;
+//
+//        // Extra
+//        private String handoverStatus;
+//        private String dcNo;
+//    }
+//}
+
+
 package onedeoleela.onedeoleela.Coordinator.DTO;
 
 import lombok.*;
@@ -168,10 +249,10 @@ import java.util.List;
 @Setter
 public class TrackerSheetDTO {
 
-    private Long      workOrderId;
-    private String    projectName;
-    private String    towerName;
-    private LocalDate date;
+    private Long         workOrderId;
+    private String       projectName;
+    private String       towerName;
+    private LocalDate    date;
     private List<RowDTO> rows;
 
     @Data
@@ -203,8 +284,7 @@ public class TrackerSheetDTO {
         private BigDecimal dcnoFixGlass;
         private BigDecimal dcnoTopBottomFix;
 
-        // STATUS (6 cols) — String: user enters "R" or "I"
-        // HARDWARE dropped from STATUS
+        // STATUS (6 cols) — String: R / I / H
         private String statusFrame;
         private String statusDoorFrame;
         private String statusShutter;
@@ -212,7 +292,7 @@ public class TrackerSheetDTO {
         private String statusFixGlass;
         private String statusTopBottomFix;
 
-        // SUPPLY (6 cols) — auto-filled when STATUS = R
+        // SUPPLY (6 cols) — auto: R / I / H → sqft
         private BigDecimal supplyFrame;
         private BigDecimal supplyDoorFrame;
         private BigDecimal supplyShutter;
@@ -220,13 +300,22 @@ public class TrackerSheetDTO {
         private BigDecimal supplyFixGlass;
         private BigDecimal supplyTopBottomFix;
 
-        // INSTALLATION (6 cols) — auto-filled when STATUS = I
+        // INSTALLATION (6 cols) — auto: I / H → sqft
         private BigDecimal installFrame;
         private BigDecimal installDoorFrame;
         private BigDecimal installShutter;
         private BigDecimal installOpenableDoor;
         private BigDecimal installFixGlass;
         private BigDecimal installTopBottomFix;
+
+        // HANDOVER (7 cols) — auto: H → sqft (HARDWARE filled if any col is H)
+        private BigDecimal handoverFrame;
+        private BigDecimal handoverDoorFrame;
+        private BigDecimal handoverShutter;
+        private BigDecimal handoverOpenableDoor;
+        private BigDecimal handoverFixGlass;
+        private BigDecimal handoverTopBottomFix;
+        private BigDecimal handoverHardware;
 
         // Extra
         private String handoverStatus;

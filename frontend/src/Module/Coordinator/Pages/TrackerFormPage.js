@@ -2623,6 +2623,944 @@
 //    centerMsg:       { padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
 //};
 
+//
+//import React, { useState, useEffect } from "react";
+//import { useNavigate } from "react-router-dom";
+//import {
+//    FaLayerGroup, FaSearch, FaBuilding, FaClipboardList,
+//    FaSpinner, FaFileExcel, FaSave,
+//    FaCheckCircle, FaExclamationTriangle, FaRegArrowAltCircleLeft
+//} from "react-icons/fa";
+//import * as XLSX from "xlsx-js-style";
+//
+//// ── Column definitions ────────────────────────────────────────────────────────
+//const SUB_COLS = [
+//    "FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX",
+//];
+//
+//const DCNO_SUB_COLS = [
+//    "FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX",
+//];
+//
+//// STATUS has 6 sub-cols (HARDWARE dropped, TOP/BOTTOM FIX kept)
+//const STATUS_SUB_COLS = [
+//    "FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX",
+//];
+//
+//// All 5 sections in order
+//// HARDWARE section dropped entirely
+//const ALL_SECTIONS = ["DCNO", "STATUS", "SUPPLY", "INSTALLATION"];
+//
+//const SECTION_SUB_COLS = {
+//    DCNO:         DCNO_SUB_COLS,
+//    STATUS:       STATUS_SUB_COLS,
+//    SUPPLY:       SUB_COLS,
+//    INSTALLATION: SUB_COLS,
+//};
+//
+//// DB key prefixes
+//const DB_PREFIX = {
+//    DCNO: "dcno", STATUS: "status",
+//    SUPPLY: "supply", INSTALLATION: "install",
+//};
+//
+//// Sub-col → camelCase suffix
+//const SUB_SUFFIX = {
+//    "FRAME":           "Frame",
+//    "DOOR FRAME":      "DoorFrame",
+//    "SHUTTER":         "Shutter",
+//    "OPENABLE DOOR":   "OpenableDoor",
+//    "FIX GLASS":       "FixGlass",
+//    "TOP / BOTTOM FIX":"TopBottomFix",
+//    "HARDWARE":        "Hardware",
+//};
+//
+//// ── Empty tracker row ─────────────────────────────────────────────────────────
+//const emptyTrackerRow = (srNo = "", flat = "", woItem = null) => {
+//    const base = {
+//        _id:      Date.now() + Math.random(),
+//        srNo,
+//        flat,
+//        location:  woItem?.location   || "",
+//        wcode:     woItem?.windowCode  || "",
+//        typology:  woItem?.typology    || "",
+//        series:    woItem?.series      || "",
+//        woLnt:     woItem?.length      || "",
+//        woHgt:     woItem?.height      || "",
+//        sqft:      woItem?.sqft        || "",
+//        length:    "",
+//        height:    "",
+//        jobCard:   "",
+//        handoverStatus: "",
+//    };
+//    ALL_SECTIONS.forEach(sec => {
+//        SECTION_SUB_COLS[sec].forEach(sub => {
+//            base[`${sec}__${sub}`] = "";
+//        });
+//    });
+//    return base;
+//};
+//
+//// ── Excel export ──────────────────────────────────────────────────────────────
+//function exportExcel(rows, projectName, workOrderNo, towerName) {
+//    const wb = XLSX.utils.book_new();
+//    const ws = XLSX.utils.json_to_sheet([]);
+//
+//    const setS = (ref, s) => {
+//        if (!ws[ref]) ws[ref] = { t: "z", v: "" };
+//        ws[ref].s = s;
+//    };
+//
+//    // Column order:
+//    // 0-11:  SR NO, FLAT, LOCATION, WCODE, TYPOLOGY, SERIES, WO LNT, WO HGT, SQ FT, LENGTH, HEIGHT, JOB CARD
+//    // 12-17: DCNO (6)
+//    // 18-23: STATUS (6) — HARDWARE dropped, TOP/BOTTOM FIX kept
+//    // 24-29: SUPPLY (6)
+//    // 30-35: INSTALLATION (6)
+//    // 36:    HANDOVER STATUS
+//    const totalCols = 37;
+//
+//    // Build column letter array (A..AR for 44 cols)
+//    const colLetters = [];
+//    for (let i = 0; i < totalCols; i++) {
+//        if (i < 26) colLetters.push(String.fromCharCode(65 + i));
+//        else colLetters.push(
+//            String.fromCharCode(64 + Math.floor(i / 26)) +
+//            String.fromCharCode(65 + (i % 26))
+//        );
+//    }
+//
+//    // ── Totals ────────────────────────────────────────────────────────────────
+//    const totalSqft = rows.reduce((s, r) => s + (parseFloat(r.sqft) || 0), 0);
+//
+//    // ── Row 1: Project / WO title ─────────────────────────────────────────────
+//    XLSX.utils.sheet_add_aoa(ws,
+//        [[`PROJECT: ${projectName || "—"}   |   WO: ${workOrderNo || "—"}   |   Tower: ${towerName || "—"}`]],
+//        { origin: "A1" }
+//    );
+//
+//    // ── Row 2: Section group headers ──────────────────────────────────────────
+//    const row2 = new Array(totalCols).fill("");
+//    row2[12] = "DC.NO";
+//    row2[18] = "STATUS";
+//    row2[24] = "SUPPLY";
+//    row2[30] = "INSTALLATION";
+//    XLSX.utils.sheet_add_aoa(ws, [row2], { origin: "A2" });
+//
+//    // ── Row 3: Sub-headers ────────────────────────────────────────────────────
+//    const row3 = [
+//        "SR NO.", "FLAT", "LOCATION", "WCODE", "TYPOLOGY", "SERIES",
+//        "WO LNT", "WO HGT", "SQ FT.", "LENGTH", "HEIGHT", "JOB CARD",
+//        ...DCNO_SUB_COLS,      // 6 cols (12-17)
+//        ...STATUS_SUB_COLS,    // 6 cols (18-23)
+//        ...SUB_COLS,           // SUPPLY 6 cols (24-29)
+//        ...SUB_COLS,           // INSTALLATION 6 cols (30-35)
+//        "HANDOVER STATUS",     // col 36
+//    ];
+//    XLSX.utils.sheet_add_aoa(ws, [row3], { origin: "A3" });
+//
+//    // ── Rows 4+: Data ─────────────────────────────────────────────────────────
+//    const dataRows = rows.map(r => [
+//        r.srNo || "", r.flat || "", r.location || "", r.wcode || "",
+//        r.typology || "", r.series || "",
+//        r.woLnt !== "" ? Number(r.woLnt) : "",
+//        r.woHgt !== "" ? Number(r.woHgt) : "",
+//        r.sqft  !== "" ? parseFloat(parseFloat(r.sqft).toFixed(2)) : "",
+//        r.length !== "" ? Number(r.length) : "",
+//        r.height !== "" ? Number(r.height) : "",
+//        r.jobCard || "",
+//        // DCNO
+//        ...DCNO_SUB_COLS.map(sub => r[`DCNO__${sub}`] !== "" ? parseFloat(r[`DCNO__${sub}`] || 0) : ""),
+//        // STATUS
+//...STATUS_SUB_COLS.map(sub => r[`STATUS__${sub}`] !== "" ? r[`STATUS__${sub}`].trim().toUpperCase() : ""),        // SUPPLY
+//        ...SUB_COLS.map(sub => r[`SUPPLY__${sub}`] !== "" ? parseFloat(r[`SUPPLY__${sub}`] || 0) : ""),
+//        // INSTALLATION
+//        ...SUB_COLS.map(sub => r[`INSTALLATION__${sub}`] !== "" ? parseFloat(r[`INSTALLATION__${sub}`] || 0) : ""),
+//        r.handoverStatus || "",
+//    ]);
+//    XLSX.utils.sheet_add_aoa(ws, dataRows, { origin: "A4" });
+//
+//    // ── Total row ─────────────────────────────────────────────────────────────
+//    const totalR = 4 + rows.length;
+//    const totalRow = new Array(totalCols).fill("");
+//    totalRow[0] = "TOTAL";
+//    totalRow[8] = parseFloat(totalSqft.toFixed(2));
+//    let ci = 12;
+//   ALL_SECTIONS.forEach(sec => {
+//       SECTION_SUB_COLS[sec].forEach(sub => {
+//           if (sec === "STATUS") {
+//               totalRow[ci++] = ""; // STATUS is R/I strings — no numeric total
+//           } else {
+//               totalRow[ci++] = rows.reduce((s, r) => s + (parseFloat(r[`${sec}__${sub}`]) || 0), 0);
+//           }
+//       });
+//   });
+//    XLSX.utils.sheet_add_aoa(ws, [totalRow], { origin: `A${totalR}` });
+//
+//    // ── Merges ────────────────────────────────────────────────────────────────
+//    const r0 = (row) => row - 1;
+//    ws["!merges"] = [
+//        { s: { r: r0(1), c: 0  }, e: { r: r0(1), c: totalCols - 1 } }, // Row 1 full
+//        ...Array.from({ length: 12 }, (_, i) => ({ s: { r: r0(2), c: i }, e: { r: r0(3), c: i } })), // A-L 2-row span
+//        { s: { r: r0(2), c: 12 }, e: { r: r0(2), c: 17 } }, // DC.NO (6)
+//        { s: { r: r0(2), c: 18 }, e: { r: r0(2), c: 23 } }, // STATUS (6)
+//        { s: { r: r0(2), c: 24 }, e: { r: r0(2), c: 29 } }, // SUPPLY (6)
+//        { s: { r: r0(2), c: 30 }, e: { r: r0(2), c: 35 } }, // INSTALLATION (6)
+//        { s: { r: r0(2), c: 36 }, e: { r: r0(3), c: 36 } }, // HANDOVER 2-row span
+//    ];
+//
+//    // ── Column widths ─────────────────────────────────────────────────────────
+//    ws["!cols"] = [
+//        { wch: 7  }, { wch: 8  }, { wch: 20 }, { wch: 10 }, { wch: 30 }, { wch: 8  },
+//        { wch: 8  }, { wch: 8  }, { wch: 9  }, { wch: 8  }, { wch: 8  }, { wch: 12 },
+//        ...Array(6).fill({ wch: 13 }),  // DCNO (6)
+//        ...Array(6).fill({ wch: 13 }),  // STATUS (6)
+//        ...Array(6).fill({ wch: 13 }),  // SUPPLY (6)
+//        ...Array(6).fill({ wch: 13 }),  // INSTALLATION (6)
+//        { wch: 14 },                    // HANDOVER
+//    ];
+//    ws["!rows"] = [{ hpt: 22 }, { hpt: 20 }, { hpt: 32 }];
+//
+//    // ── Style helpers ─────────────────────────────────────────────────────────
+//    const bdr = (rgb, style = "thin") => ({ style, color: { rgb } });
+//    const allBdr = (rgb) => ({ top: bdr(rgb), bottom: bdr(rgb), left: bdr(rgb), right: bdr(rgb) });
+//
+//    // Row 1 — title
+//    setS("A1", {
+//        font:      { bold: true, sz: 13, name: "Calibri", color: { rgb: "1A2940" } },
+//        alignment: { horizontal: "center", vertical: "center" },
+//        fill:      { patternType: "solid", fgColor: { rgb: "EEF2F7" } },
+//        border:    { bottom: bdr("A0B0C8", "medium") },
+//    });
+//
+//    // Section group header colors
+//    const secHdr = {
+//        base:         { fill: "D6E4F0", text: "1A2940" },
+//        DCNO:         { fill: "FCF3CF", text: "7D6608" },
+//        STATUS:       { fill: "FADBD8", text: "922B21" },
+//        SUPPLY:       { fill: "D6EAF8", text: "1A5276" },
+//        INSTALLATION: { fill: "D5F5E3", text: "1E8449" },
+//    };
+//    const secSub = {
+//        base:         "BDD7EE",
+//        DCNO:         "F9E79F",
+//        STATUS:       "F1948A",
+//        SUPPLY:       "AED6F1",
+//        INSTALLATION: "A9DFBF",
+//    };
+//
+//    const getSecForCol = (ci) => {
+//        if (ci >= 12 && ci <= 17) return "DCNO";
+//        if (ci >= 18 && ci <= 23) return "STATUS";
+//        if (ci >= 24 && ci <= 29) return "SUPPLY";
+//        if (ci >= 30 && ci <= 35) return "INSTALLATION";
+//        return "base";
+//    };
+//
+//    // Row 2 group headers
+//    colLetters.forEach((col, i) => {
+//        const sec = getSecForCol(i);
+//        const c   = secHdr[sec];
+//        setS(`${col}2`, {
+//            font:      { bold: true, sz: 9, name: "Calibri", color: { rgb: c.text } },
+//            alignment: { horizontal: "center", vertical: "center", wrapText: true },
+//            fill:      { patternType: "solid", fgColor: { rgb: c.fill } },
+//            border:    allBdr("A8C4DC"),
+//        });
+//    });
+//
+//    // Row 3 sub-headers
+//    colLetters.forEach((col, i) => {
+//        const sec = getSecForCol(i);
+//        setS(`${col}3`, {
+//            font:      { bold: true, sz: 8, name: "Calibri", color: { rgb: "000000" } },
+//            alignment: { horizontal: "center", vertical: "center", wrapText: true },
+//            fill:      { patternType: "solid", fgColor: { rgb: secSub[sec] } },
+//            border:    allBdr("A8C4DC"),
+//        });
+//    });
+//
+//    // Data rows
+//    const dataTint = {
+//        base:         ["F0F4F8", "FFFFFF"],
+//        DCNO:         ["FDFDE7", "FEFEF5"],
+//        STATUS:       ["FDEDEC", "FEF5F5"],
+//        SUPPLY:       ["EBF5FB", "F8FCFE"],
+//        INSTALLATION: ["E9F7EF", "F4FCF7"],
+//    };
+//
+//    dataRows.forEach((_, ri) => {
+//        const excelR = ri + 4;
+//        const isOdd  = ri % 2 === 1;
+//        colLetters.forEach((col, i) => {
+//            const sec    = getSecForCol(i);
+//            const colors = dataTint[sec];
+//            setS(`${col}${excelR}`, {
+//                font:      { sz: 9, name: "Calibri", color: { rgb: "1A2940" } },
+//                alignment: { horizontal: i >= 6 ? "right" : i <= 1 ? "center" : "left", vertical: "center" },
+//                fill:      { patternType: "solid", fgColor: { rgb: isOdd ? colors[0] : colors[1] } },
+//                border:    allBdr("D8E2EC"),
+//            });
+//        });
+//    });
+//
+//    // Total row
+//    colLetters.forEach((col, i) => {
+//        setS(`${col}${totalR}`, {
+//            font:      { bold: true, sz: 9, name: "Calibri", color: { rgb: "1A2940" } },
+//            alignment: { horizontal: i >= 6 ? "right" : "center", vertical: "center" },
+//            fill:      { patternType: "solid", fgColor: { rgb: "D9D9D9" } },
+//            border:    {
+//                top:    bdr("888888", "medium"),
+//                bottom: bdr("888888", "medium"),
+//                left:   bdr("AAAAAA"),
+//                right:  bdr("AAAAAA"),
+//            },
+//        });
+//    });
+//
+//    XLSX.utils.book_append_sheet(wb, ws, "Tracker");
+//    XLSX.writeFile(wb, `Tracker_${projectName || "export"}_${workOrderNo || ""}.xlsx`);
+//}
+//
+//// ─────────────────────────────────────────────────────────────────────────────
+//export default function TrackerFormPage() {
+//    const navigate = useNavigate();
+//
+//    const [projects,        setProjects]       = useState([]);
+//    const [selectedProject, setSelectedProject] = useState(null);
+//    const [workOrders,      setWorkOrders]      = useState([]);
+//    const [selectedWO,      setSelectedWO]      = useState(null);
+//    const [search,          setSearch]          = useState("");
+//    const [loadingProjects, setLoadingProjects]  = useState(true);
+//    const [loadingWOs,      setLoadingWOs]       = useState(false);
+//    const [loadingRows,     setLoadingRows]      = useState(false);
+//    const [rows,            setRows]            = useState([]);
+//    const [saveMsg,         setSaveMsg]         = useState(null);
+//    const [saving,          setSaving]          = useState(false);
+//    const [sheetId,         setSheetId]         = useState(null);
+//    const [step,            setStep]            = useState("project");
+//
+//    // Load projects
+//    useEffect(() => {
+//        fetch(`${process.env.REACT_APP_API_URL}/projects`)
+//            .then(r => r.json())
+//            .then(data => { setProjects(data); setLoadingProjects(false); })
+//            .catch(() => setLoadingProjects(false));
+//    }, []);
+//
+//    const handleSelectProject = async (project) => {
+//        setSelectedProject(project);
+//        setSelectedWO(null);
+//        setRows([]);
+//        setSheetId(null);
+//        setStep("wo");
+//        setLoadingWOs(true);
+//        try {
+//            const res  = await fetch(
+//                `${process.env.REACT_APP_API_URL}/api/work-orders/by-project/${encodeURIComponent(project.projectName)}`
+//            );
+//            const data = await res.json();
+//            setWorkOrders(Array.isArray(data) ? data : []);
+//        } catch {
+//            setWorkOrders([]);
+//        } finally {
+//            setLoadingWOs(false);
+//        }
+//    };
+//
+//    const handleSelectWO = async (wo) => {
+//        setSelectedWO(wo);
+//        setLoadingRows(true);
+//        setRows([]);
+//        setSheetId(null);
+//        setSaveMsg(null);
+//        try {
+//            // Fetch info sheets to get flat numbers
+//            const sheetRes = await fetch(
+//                `${process.env.REACT_APP_API_URL}/api/info-sheets/by-work-order/${wo.id}`
+//            );
+//            const sheets   = await sheetRes.json();
+//            const sheet    = Array.isArray(sheets) && sheets.length > 0 ? sheets[0] : null;
+//            const flatList = sheet
+//                ? (sheet.flats || []).map(f => ({ flatNo: f.flatNo, items: f.items || [] }))
+//                : [];
+//            const woItems  = wo.items || [];
+//
+//            // Build tracker rows
+//            const trackerRows = [];
+//            let srNo = 1;
+//            if (flatList.length > 0) {
+//                flatList.forEach(flat => {
+//                    (flat.items || []).forEach(sheetItem => {
+//                        const woItem = woItems.find(w =>
+//                            w.location   === sheetItem.location &&
+//                            w.windowCode === sheetItem.windowCode &&
+//                            w.typology   === sheetItem.typology
+//                        ) || sheetItem;
+//                        trackerRows.push(emptyTrackerRow(srNo++, flat.flatNo, woItem));
+//                    });
+//                });
+//            } else {
+//                woItems.forEach(item => trackerRows.push(emptyTrackerRow(srNo++, "", item)));
+//            }
+//
+//            // Check if tracker sheet already exists — restore saved values
+//            try {
+//                const tsRes = await fetch(
+//                    `${process.env.REACT_APP_API_URL}/api/tracker-sheets/by-work-order/${wo.id}`
+//                );
+//                if (tsRes.ok) {
+//                    const tsData = await tsRes.json();
+//                    setSheetId(tsData.id);
+//                    if (tsData.rows && tsData.rows.length > 0) {
+//                       const restored = trackerRows.map((row, idx) => {
+//                           const saved = tsData.rows[idx];
+//                           if (!saved) return row;
+//                           const r = { ...row };
+//                           r.length         = saved.length         ?? "";
+//                           r.height         = saved.height         ?? "";
+//                           r.jobCard        = saved.jobCard        || "";
+//                           r.handoverStatus = saved.handoverStatus || "";
+//
+//                           // Restore DCNO fields
+//                           SECTION_SUB_COLS["DCNO"].forEach(sub => {
+//                               const fkey  = `DCNO__${sub}`;
+//                               const dbKey = `dcno${SUB_SUFFIX[sub]}`;
+//                               r[fkey] = saved[dbKey] ?? "";
+//                           });
+//
+//                           // Restore STATUS and re-derive SUPPLY/INSTALLATION from it
+//                           SECTION_SUB_COLS["STATUS"].forEach(sub => {
+//                               const statusFkey  = `STATUS__${sub}`;
+//                               const supplyFkey  = `SUPPLY__${sub}`;
+//                               const installFkey = `INSTALLATION__${sub}`;
+//                               const statusVal   = saved[`status${SUB_SUFFIX[sub]}`] || "";
+//                               const sqftVal     = parseFloat(r.sqft) || 0;
+//                               const v           = statusVal.trim().toLowerCase();
+//
+//                               r[statusFkey] = statusVal;
+//
+//                               if (v === "r") {
+//                                   r[supplyFkey]  = sqftVal.toFixed(4);
+//                                   r[installFkey] = "0";
+//                               } else if (v === "i") {
+//                                   r[supplyFkey]  = sqftVal.toFixed(4);
+//                                   r[installFkey] = sqftVal.toFixed(4);
+//                               } else {
+//                                   r[supplyFkey]  = saved[`supply${SUB_SUFFIX[sub]}`] ?? "";
+//                                   r[installFkey] = saved[`install${SUB_SUFFIX[sub]}`] ?? "";
+//                               }
+//                           });
+//
+//                           return r;
+//                       });
+//                        setRows(restored);
+//                    } else {
+//                        setRows(trackerRows);
+//                    }
+//                } else {
+//                    setSheetId(null);
+//                    setRows(trackerRows);
+//                }
+//            } catch {
+//                setSheetId(null);
+//                setRows(trackerRows);
+//            }
+//
+//            setStep("tracker");
+//        } catch {
+//            setSaveMsg({ type: "error", text: "Failed to load work order data." });
+//        } finally {
+//            setLoadingRows(false);
+//        }
+//    };
+//
+//    const updateRow = (_id, field, value) =>
+//        setRows(prev => prev.map(r => {
+//            if (r._id !== _id) return r;
+//            const updated = { ...r, [field]: value };
+//
+//            // ── STATUS → SUPPLY / INSTALLATION auto-fill logic ────────────────
+//            // If field is a STATUS sub-col (STATUS__FRAME, STATUS__DOOR FRAME etc.)
+//            if (field.startsWith("STATUS__")) {
+//                const sub = field.replace("STATUS__", ""); // e.g. "FRAME"
+//                const supplyKey  = `SUPPLY__${sub}`;
+//                const installKey = `INSTALLATION__${sub}`;
+//                const sqftVal    = parseFloat(r.sqft) || 0;
+//                const v          = value.trim().toLowerCase();
+//
+//                if (v === "r") {
+//                    // R — fill SUPPLY with sqft only
+//                    updated[supplyKey]  = sqftVal.toFixed(4);
+//                    updated[installKey] = "0";
+//                } else if (v === "i") {
+//                    // I — fill BOTH SUPPLY and INSTALLATION with sqft
+//                    updated[supplyKey]  = sqftVal.toFixed(4);
+//                    updated[installKey] = sqftVal.toFixed(4);
+//                } else {
+//                    // Cleared — reset both to 0
+//                    updated[supplyKey]  = "0";
+//                    updated[installKey] = "0";
+//                }
+//            }
+//
+//            return updated;
+//        }));
+//
+//    // Save to DB
+//    const handleSave = async () => {
+//        setSaving(true);
+//        setSaveMsg(null);
+//        const payload = {
+//            workOrderId: selectedWO.id,
+//            projectName: selectedProject?.projectName || "",
+//            towerName:   selectedWO?.towerName        || "",
+//            date:        new Date().toISOString().split("T")[0],
+//            rows: rows.map(r => {
+//                const row = {
+//                    srNo: r.srNo, flat: r.flat, location: r.location,
+//                    wcode: r.wcode, typology: r.typology, series: r.series,
+//                    woLnt: r.woLnt || null, woHgt: r.woHgt || null, sqft: r.sqft || null,
+//                    length: r.length || null, height: r.height || null,
+//                    jobCard: r.jobCard || null,
+//                    handoverStatus: r.handoverStatus || null,
+//                };
+//             ALL_SECTIONS.forEach(sec => {
+//                 if (sec === "SUPPLY" || sec === "INSTALLATION") return;
+//                 const prefix = DB_PREFIX[sec];
+//                 SECTION_SUB_COLS[sec].forEach(sub => {
+//                     const fkey  = `${sec}__${sub}`;
+//                     const dbKey = `${prefix}${SUB_SUFFIX[sub]}`;
+//                     if (sec === "STATUS") {
+//                         row[dbKey] = r[fkey] !== "" ? r[fkey].trim().toUpperCase() : null;
+//                     } else {
+//                         row[dbKey] = r[fkey] !== "" ? parseFloat(r[fkey]) || null : null;
+//                     }
+//                 });
+//             });
+//                return row;
+//            }),
+//        };
+//
+//        try {
+//            const url    = sheetId
+//                ? `${process.env.REACT_APP_API_URL}/api/tracker-sheets/${sheetId}`
+//                : `${process.env.REACT_APP_API_URL}/api/tracker-sheets`;
+//            const method = sheetId ? "PUT" : "POST";
+//            const res    = await fetch(url, {
+//                method,
+//                headers: { "Content-Type": "application/json" },
+//                body:    JSON.stringify(payload),
+//            });
+//            const data = await res.json();
+//            if (!res.ok) throw new Error(data.message || "Server error");
+//            if (!sheetId) setSheetId(data.id);
+//            setSaveMsg({ type: "success", text: sheetId ? "Tracker sheet updated!" : "Tracker sheet saved!" });
+//        } catch (err) {
+//            setSaveMsg({ type: "error", text: err.message });
+//        } finally {
+//            setSaving(false);
+//        }
+//    };
+//
+//    const totalSqft = rows.reduce((s, r) => s + (parseFloat(r.sqft) || 0), 0);
+//
+//    const filtered = projects.filter(p =>
+//        p.projectName?.toLowerCase().includes(search.toLowerCase()) ||
+//        p.projectCode?.toLowerCase().includes(search.toLowerCase())
+//    );
+//
+//    const sectionColors = {
+//        DCNO:         { bg: "#FDFDE7", hdr: "#F9E79F", text: "#7D6608" },
+//        STATUS:       { bg: "#FDEDEC", hdr: "#F1948A", text: "#922B21" },
+//        SUPPLY:       { bg: "#EBF5FB", hdr: "#AED6F1", text: "#1A5276" },
+//        INSTALLATION: { bg: "#E9F7EF", hdr: "#A9DFBF", text: "#1E8449" },
+//    };
+//
+//    const LEFT_COLS = [
+//        { key: "srNo",     label: "SR NO.",    w: 55,  auto: true },
+//        { key: "flat",     label: "FLAT",      w: 70,  auto: true },
+//        { key: "location", label: "LOCATION",  w: 140, auto: true },
+//        { key: "wcode",    label: "WCODE",     w: 90,  auto: true },
+//        { key: "typology", label: "TYPOLOGY",  w: 200, auto: true },
+//        { key: "series",   label: "SERIES",    w: 80,  auto: true },
+//        { key: "woLnt",    label: "WO LNT",    w: 75,  auto: true },
+//        { key: "woHgt",    label: "WO HGT",    w: 75,  auto: true },
+//        { key: "sqft",     label: "SQ FT.",    w: 80,  auto: true },
+//        { key: "length",   label: "LENGTH",    w: 80  },
+//        { key: "height",   label: "HEIGHT",    w: 80  },
+//        { key: "jobCard",  label: "JOB CARD",  w: 100 },
+//    ];
+//
+//    // ── Selection screen ──────────────────────────────────────────────────────
+//    if (step === "project" || step === "wo") {
+//        return (
+//            <div style={css.page}>
+//                <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+//                <div style={css.pageHeader}>
+//                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+//                        <div style={css.headerIcon}><FaLayerGroup /></div>
+//                        <div>
+//                            <h1 style={css.pageTitle}>Project Tracker</h1>
+//                            <p style={css.pageSubtitle}>Select project → work order → fill tracker data</p>
+//                        </div>
+//                    </div>
+//                </div>
+//
+//                <div style={css.selectionPanels}>
+//                    {/* Projects */}
+//                    <div style={css.selPanel}>
+//                        <div style={css.selPanelHeader}>
+//                            <FaBuilding style={{ color: "#0ea5e9", marginRight: 8 }} />
+//                            <span style={{ fontWeight: 700, fontSize: 14 }}>Projects ({filtered.length})</span>
+//                        </div>
+//                        <div style={css.searchBox}>
+//                            <FaSearch style={{ color: "#94a3b8", fontSize: 12 }} />
+//                            <input style={css.searchInput} placeholder="Search…"
+//                                value={search} onChange={e => setSearch(e.target.value)} />
+//                        </div>
+//                        <div style={css.selList}>
+//                            {loadingProjects ? (
+//                                <div style={css.centerMsg}><FaSpinner style={{ animation: "spin 1s linear infinite" }} />&nbsp;Loading…</div>
+//                            ) : filtered.map(p => (
+//                                <div
+//                                    key={p.projectId}
+//                                    style={{ ...css.selItem, ...(selectedProject?.projectId === p.projectId ? css.selItemActive : {}) }}
+//                                    onClick={() => handleSelectProject(p)}
+//                                >
+//                                    <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{p.projectName}</div>
+//                                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{p.projectCode}</div>
+//                                </div>
+//                            ))}
+//                        </div>
+//                    </div>
+//
+//                    {/* Work Orders */}
+//                    <div style={css.selPanel}>
+//                        <div style={css.selPanelHeader}>
+//                            <FaClipboardList style={{ color: "#8b5cf6", marginRight: 8 }} />
+//                            <span style={{ fontWeight: 700, fontSize: 14 }}>
+//                                Work Orders {selectedProject ? `(${workOrders.length})` : ""}
+//                            </span>
+//                        </div>
+//                        <div style={css.selList}>
+//                            {!selectedProject ? (
+//                                <div style={css.centerMsg}>Select a project first</div>
+//                            ) : loadingWOs ? (
+//                                <div style={css.centerMsg}><FaSpinner style={{ animation: "spin 1s linear infinite" }} />&nbsp;Loading…</div>
+//                            ) : workOrders.length === 0 ? (
+//                                <div style={css.centerMsg}>No work orders found</div>
+//                            ) : workOrders.map(wo => (
+//                                <div
+//                                    key={wo.id}
+//                                    style={{ ...css.selItem, ...(selectedWO?.id === wo.id ? css.selItemActive : {}) }}
+//                                    onClick={() => handleSelectWO(wo)}
+//                                >
+//                                    <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{wo.workOrderNo}</div>
+//                                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+//                                        {wo.towerName && <span style={css.towerBadge}>{wo.towerName}</span>}
+//                                        &nbsp;{wo.items?.length || 0} items
+//                                    </div>
+//                                </div>
+//                            ))}
+//                        </div>
+//                    </div>
+//                </div>
+//
+//                {loadingRows && (
+//                    <div style={css.centerMsg}>
+//                        <FaSpinner style={{ animation: "spin 1s linear infinite", marginRight: 8 }} />
+//                        Building tracker rows…
+//                    </div>
+//                )}
+//            </div>
+//        );
+//    }
+//
+//    // ── Tracker form ──────────────────────────────────────────────────────────
+//    return (
+//        <div style={css.page}>
+//            <style>{`
+//                @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+//                .tr-row:hover { background: #f8fafc !important; }
+//                .tr-cell:focus { border-color: #0284c7 !important; outline: none; }
+//                .save-btn:hover:not(:disabled) { background: #047857 !important; transform: translateY(-1px); }
+//                .dl-btn:hover { background: #15803d !important; transform: translateY(-1px); }
+//                input[type=number]::-webkit-inner-spin-button,
+//                input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+//                input[type=number] { -moz-appearance: textfield; }
+//            `}</style>
+//
+//            {/* Header */}
+//            <div style={css.pageHeader}>
+//                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+//                    <button style={css.backBtn} onClick={() => {
+//                        setStep("project"); setSelectedProject(null);
+//                        setSelectedWO(null); setRows([]); setSheetId(null);
+//                    }}>
+//                        <FaRegArrowAltCircleLeft /> Back to Selection
+//                    </button>
+//                    <h1 style={css.pageTitle}>Project Tracker</h1>
+//                    <div style={css.metaLine}>
+//                        <span style={css.projBadge}>{selectedProject?.projectName}</span>
+//                        <span style={css.woBadge}>{selectedWO?.workOrderNo}</span>
+//                        {selectedWO?.towerName && <span style={css.towerBadge}>{selectedWO.towerName}</span>}
+//                        <span style={{ fontSize: 12, color: "#64748b" }}>{rows.length} rows</span>
+//                        {sheetId && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Saved</span>}
+//                    </div>
+//                </div>
+//
+//                <div style={{ display: "flex", gap: 10 }}>
+//                    <button
+//                        className="save-btn"
+//                        style={css.saveBtn}
+//                        onClick={handleSave}
+//                        disabled={saving}
+//                    >
+//                        {saving ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaSave style={{ fontSize: 14 }} />}
+//                        <span>{saving ? "Saving…" : sheetId ? "Update" : "Save"}</span>
+//                    </button>
+//                    <button
+//                        className="dl-btn"
+//                        style={css.excelBtn}
+//                        onClick={() => exportExcel(rows, selectedProject?.projectName, selectedWO?.workOrderNo, selectedWO?.towerName)}
+//                    >
+//                        <FaFileExcel style={{ fontSize: 15 }} />
+//                        <span>Download Excel</span>
+//                    </button>
+//                </div>
+//            </div>
+//
+//            {saveMsg && (
+//                <div style={{ ...css.toast, ...(saveMsg.type === "success" ? css.toastOk : css.toastErr) }}>
+//                    {saveMsg.type === "success" ? <FaCheckCircle /> : <FaExclamationTriangle />}
+//                    &nbsp;{saveMsg.text}
+//                </div>
+//            )}
+//
+//            {/* Table */}
+//            <div style={css.tableCard}>
+//                <div style={{ overflowX: "auto" }}>
+//                    <table style={{ borderCollapse: "collapse", fontSize: 11, whiteSpace: "nowrap" }}>
+//                        <thead>
+//                            {/* Row 1: Section group headers */}
+//                            <tr>
+//                                {LEFT_COLS.map(col => (
+//                                    <th key={col.key} rowSpan={2}
+//                                        style={{ ...css.th, minWidth: col.w, background: "#1e293b", color: "#f8fafc", verticalAlign: "middle" }}>
+//                                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+//                                            <span>{col.label}</span>
+//                                            {col.auto && <span style={{ fontSize: 8, color: "#a5b4fc", fontWeight: 700 }}>AUTO</span>}
+//                                        </div>
+//                                    </th>
+//                                ))}
+//                                {ALL_SECTIONS.map(sec => (
+//                                    <th key={sec}
+//                                        colSpan={SECTION_SUB_COLS[sec].length}
+//                                        style={{
+//                                            ...css.th,
+//                                            background: sectionColors[sec].hdr,
+//                                            color: sectionColors[sec].text,
+//                                            textAlign: "center",
+//                                            fontWeight: 800,
+//                                            fontSize: 12,
+//                                            letterSpacing: "0.05em",
+//                                        }}>
+//                                        {sec === "DCNO" ? "DC.NO" : sec}
+//                                    </th>
+//                                ))}
+//                                <th rowSpan={2} style={{ ...css.th, minWidth: 110, background: "#334155", color: "#f8fafc" }}>
+//                                    HANDOVER STATUS
+//                                </th>
+//                            </tr>
+//
+//                            {/* Row 2: Sub-column headers */}
+//                            <tr>
+//                                {ALL_SECTIONS.map(sec =>
+//                                    SECTION_SUB_COLS[sec].map(sub => (
+//                                        <th key={`${sec}_${sub}`}
+//                                            style={{
+//                                                ...css.th,
+//                                                minWidth: 100,
+//                                                background: sectionColors[sec].bg,
+//                                                color: sectionColors[sec].text,
+//                                                fontSize: 10,
+//                                                fontWeight: 700,
+//                                                textAlign: "center",
+//                                                whiteSpace: "normal",
+//                                                lineHeight: 1.2,
+//                                                padding: "6px 6px",
+//                                            }}>
+//                                            {sub}
+//                                        </th>
+//                                    ))
+//                                )}
+//                            </tr>
+//                        </thead>
+//
+//                        <tbody>
+//                            {rows.map((row, idx) => (
+//                                <tr key={row._id} className="tr-row"
+//                                    style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+//
+//                                    {/* Left auto/editable cols */}
+//                                    {LEFT_COLS.map(col => (
+//                                        <td key={col.key} style={css.td}>
+//                                            {col.auto ? (
+//                                                <div style={css.autoCell}>
+//                                                    {col.key === "sqft" && row[col.key]
+//                                                        ? parseFloat(row[col.key]).toFixed(2)
+//                                                        : row[col.key] || "—"}
+//                                                </div>
+//                                            ) : (
+//                                                <input
+//                                                    className="tr-cell"
+//                                                    style={{ ...css.cell, width: col.w - 16 }}
+//                                                    value={row[col.key]}
+//                                                    onChange={e => updateRow(row._id, col.key, e.target.value)}
+//                                                    placeholder={col.key === "jobCard" ? "e.g. 208-01" : ""}
+//                                                />
+//                                            )}
+//                                        </td>
+//                                    ))}
+//
+//                                    {/* Section sub-cols */}
+//                                    {ALL_SECTIONS.map(sec =>
+//                                        SECTION_SUB_COLS[sec].map(sub => {
+//                                            const fkey      = `${sec}__${sub}`;
+//                                            const isStatus  = sec === "STATUS";
+//                                            // SUPPLY/INSTALL cells driven by STATUS are auto (read-only)
+//                                            const statusKey = `STATUS__${sub}`;
+//                                            const statusVal = row[statusKey]?.trim().toLowerCase();
+//                                            // R → SUPPLY auto-driven | I → BOTH SUPPLY and INSTALLATION auto-driven
+//                                            const isAutoSupply  = sec === "SUPPLY"       && STATUS_SUB_COLS.includes(sub) && (statusVal === "r" || statusVal === "i");
+//                                            const isAutoInstall = sec === "INSTALLATION" && STATUS_SUB_COLS.includes(sub) && statusVal === "i";
+//                                            const isAutoDriven  = isAutoSupply || isAutoInstall;
+//
+//                                            return (
+//                                                <td key={fkey}
+//                                                    style={{ ...css.td, background: idx % 2 === 0 ? sectionColors[sec].bg : `${sectionColors[sec].hdr}55` }}>
+//                                                    <input
+//                                                        className="tr-cell"
+//                                                        style={{
+//                                                            ...css.cell,
+//                                                            width: 84,
+//                                                            textAlign: isStatus ? "center" : "right",
+//                                                            // STATUS: plain white editable
+//                                                            // Auto-driven: blue read-only
+//                                                            ...(isAutoDriven ? css.cellAutoDriven : {}),
+//                                                            ...(isStatus ? { fontWeight: 700, textTransform: "uppercase" } : {}),
+//                                                        }}
+//                                                        type={isStatus ? "text" : "number"}
+//                                                        value={row[fkey]}
+//                                                        readOnly={isAutoDriven}
+//                                                        onChange={e => updateRow(row._id, fkey, e.target.value)}
+//                                                        placeholder={isStatus ? "R / I" : "0.00"}
+//                                                        maxLength={isStatus ? 1 : undefined}
+//                                                    />
+//                                                </td>
+//                                            );
+//                                        })
+//                                    )}
+//
+//                                    {/* Handover status */}
+//                                    <td style={css.td}>
+//                                        <input
+//                                            className="tr-cell"
+//                                            style={{ ...css.cell, width: 94 }}
+//                                            value={row.handoverStatus || ""}
+//                                            onChange={e => updateRow(row._id, "handoverStatus", e.target.value)}
+//                                            placeholder="Status"
+//                                        />
+//                                    </td>
+//                                </tr>
+//                            ))}
+//                        </tbody>
+//
+//                        <tfoot>
+//                            <tr style={{ background: "#f1f5f9", borderTop: "2px solid #cbd5e1" }}>
+//                                <td colSpan={9} style={{ padding: "10px 14px", fontWeight: 800, fontSize: 12, color: "#1e293b" }}>
+//                                    TOTAL &nbsp;
+//                                    <span style={{ color: "#0284c7" }}>Sqft: {totalSqft.toFixed(2)}</span>
+//                                </td>
+//                                <td colSpan={3} />
+//                                {ALL_SECTIONS.map(sec =>
+//                                    SECTION_SUB_COLS[sec].map(sub => {
+//                                        const fkey = `${sec}__${sub}`;
+//                                        const total = rows.reduce((s, r) => s + (parseFloat(r[fkey]) || 0), 0);
+//                                        return (
+//                                            <td key={fkey}
+//                                                style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700, fontSize: 11, color: sectionColors[sec].text }}>
+//                                                {total > 0 ? total.toFixed(2) : ""}
+//                                            </td>
+//                                        );
+//                                    })
+//                                )}
+//                                <td />
+//                            </tr>
+//                        </tfoot>
+//                    </table>
+//                </div>
+//            </div>
+//
+//            {/* Summary strip */}
+//            <div style={css.summaryStrip}>
+//                {[
+//                    { label: "Project",    val: selectedProject?.projectName || "—", color: "#1e293b" },
+//                    { label: "Work Order", val: selectedWO?.workOrderNo || "—",       color: "#0284c7" },
+//                    { label: "Tower",      val: selectedWO?.towerName   || "—",       color: "#d97706" },
+//                    { label: "Total Rows", val: rows.length,                          color: "#475569" },
+//                    { label: "Total Sqft", val: totalSqft.toFixed(2),                color: "#0284c7" },
+//                    { label: "DB Status",  val: sheetId ? "Saved" : "Not saved",      color: sheetId ? "#16a34a" : "#94a3b8" },
+//                ].map(s => (
+//                    <div key={s.label} style={css.summaryItem}>
+//                        <span style={css.summaryLabel}>{s.label}</span>
+//                        <span style={{ fontSize: 14, fontWeight: 800, color: s.color }}>{s.val}</span>
+//                    </div>
+//                ))}
+//            </div>
+//        </div>
+//    );
+//}
+//
+//// ── Styles ────────────────────────────────────────────────────────────────────
+//const css = {
+//    page:            { maxWidth: 1600, margin: "0 auto", padding: "0 4px 56px", fontFamily: "'Inter',-apple-system,sans-serif" },
+//    pageHeader:      { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, padding: "28px 0 20px", flexWrap: "wrap" },
+//    headerIcon:      { width: 44, height: 44, background: "linear-gradient(135deg,#f59e0b,#d97706)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 20 },
+//    pageTitle:       { margin: 0, fontSize: 22, fontWeight: 800, color: "#0f172a" },
+//    pageSubtitle:    { margin: "3px 0 0", fontSize: 13, color: "#64748b" },
+//    backBtn:         { background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: "#64748b", fontWeight: 500, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 },
+//    metaLine:        { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 },
+//    projBadge:       { background: "#e0f2fe", color: "#0284c7", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 12 },
+//    woBadge:         { background: "#ede9fe", color: "#7c3aed", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 12 },
+//    towerBadge:      { background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10, border: "1px solid #fde68a" },
+//    saveBtn:         { display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", background: "#10b981", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s" },
+//    excelBtn:        { display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s" },
+//    toast:           { display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, marginBottom: 16, border: "1px solid" },
+//    toastOk:         { background: "#ecfdf5", color: "#047857", borderColor: "#a7f3d0" },
+//    toastErr:        { background: "#fef2f2", color: "#b91c1c", borderColor: "#fecaca" },
+//    tableCard:       { background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 1px 6px rgba(0,0,0,0.04)", marginBottom: 20, overflow: "hidden" },
+//    th:              { padding: "10px 8px", fontWeight: 700, textAlign: "left", fontSize: 11, borderRight: "1px solid rgba(255,255,255,0.15)", verticalAlign: "middle", whiteSpace: "nowrap" },
+//    td:              { padding: "4px 5px", verticalAlign: "middle" },
+//    cell:            { padding: "5px 7px", border: "1px solid #cbd5e1", borderRadius: 4, fontSize: 11, color: "#0f172a", background: "#fff", outline: "none" },
+//    autoCell:        { padding: "5px 8px", background: "#f1f5f9", borderRadius: 4, fontSize: 11, color: "#475569", fontWeight: 500, border: "1px solid #e2e8f0", minWidth: 40, textAlign: "right" },
+//    cellAutoDriven:  { background: "#eff6ff", color: "#0284c7", cursor: "not-allowed", fontWeight: 700, borderColor: "#bfdbfe" },
+//    summaryStrip:    { display: "flex", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" },
+//    summaryItem:     { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 10px", borderRight: "1px solid #e2e8f0" },
+//    summaryLabel:    { fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 },
+//    selectionPanels: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 },
+//    selPanel:        { background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 2px 6px rgba(0,0,0,0.04)" },
+//    selPanelHeader:  { display: "flex", alignItems: "center", padding: "14px 18px", borderBottom: "1px solid #f1f5f9", background: "#fafbfc" },
+//    searchBox:       { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" },
+//    searchInput:     { border: "none", background: "transparent", outline: "none", fontSize: 13, flex: 1 },
+//    selList:         { maxHeight: 320, overflowY: "auto" },
+//    selItem:         { padding: "12px 18px", cursor: "pointer", borderBottom: "1px solid #f8fafc", borderLeft: "3px solid transparent", transition: "all 0.15s" },
+//    selItemActive:   { background: "#eff6ff", borderLeft: "3px solid #0284c7" },
+//    centerMsg:       { padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 },
+//};
+
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -2638,59 +3576,66 @@ const SUB_COLS = [
     "FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX",
 ];
 
-const DCNO_SUB_COLS = [
-    "FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX",
-];
+const DCNO_SUB_COLS    = [...SUB_COLS];
+const STATUS_SUB_COLS  = [...SUB_COLS];  // 6 cols — no HARDWARE in STATUS
+const HANDOVER_SUB_COLS = [
+    "FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX", "HARDWARE",
+]; // 7 cols — HARDWARE only in HANDOVER
 
-// STATUS has 6 sub-cols (HARDWARE dropped, TOP/BOTTOM FIX kept)
-const STATUS_SUB_COLS = [
-    "FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX",
-];
-
-// All 5 sections in order
-// HARDWARE section dropped entirely
-const ALL_SECTIONS = ["DCNO", "STATUS", "SUPPLY", "INSTALLATION"];
+const ALL_SECTIONS = ["DCNO", "STATUS", "SUPPLY", "INSTALLATION", "HANDOVER"];
 
 const SECTION_SUB_COLS = {
     DCNO:         DCNO_SUB_COLS,
     STATUS:       STATUS_SUB_COLS,
     SUPPLY:       SUB_COLS,
     INSTALLATION: SUB_COLS,
+    HANDOVER:     HANDOVER_SUB_COLS,
 };
 
-// DB key prefixes
 const DB_PREFIX = {
     DCNO: "dcno", STATUS: "status",
-    SUPPLY: "supply", INSTALLATION: "install",
+    SUPPLY: "supply", INSTALLATION: "install", HANDOVER: "handover",
 };
 
-// Sub-col → camelCase suffix
 const SUB_SUFFIX = {
-    "FRAME":           "Frame",
-    "DOOR FRAME":      "DoorFrame",
-    "SHUTTER":         "Shutter",
-    "OPENABLE DOOR":   "OpenableDoor",
-    "FIX GLASS":       "FixGlass",
-    "TOP / BOTTOM FIX":"TopBottomFix",
-    "HARDWARE":        "Hardware",
+    "FRAME":            "Frame",
+    "DOOR FRAME":       "DoorFrame",
+    "SHUTTER":          "Shutter",
+    "OPENABLE DOOR":    "OpenableDoor",
+    "FIX GLASS":        "FixGlass",
+    "TOP / BOTTOM FIX": "TopBottomFix",
+    "HARDWARE":         "Hardware",
 };
+
+// ── Sqft calculation ──────────────────────────────────────────────────────────
+function calcSqft(length, height) {
+    const l = parseFloat(length);
+    const h = parseFloat(height);
+    if (!l || !h || l <= 0 || h <= 0) return null;
+    return ((l * h) / 1_000_000 * 10.764).toFixed(4);
+}
 
 // ── Empty tracker row ─────────────────────────────────────────────────────────
 const emptyTrackerRow = (srNo = "", flat = "", woItem = null) => {
+    const defaultSqft = woItem
+        ? (calcSqft(woItem.length ?? woItem.woLnt, woItem.height ?? woItem.woHgt)
+            ?? (woItem.sqft ? String(woItem.sqft) : ""))
+        : "";
+
     const base = {
-        _id:      Date.now() + Math.random(),
+        _id:            Date.now() + Math.random(),
         srNo,
         flat,
-        location:  woItem?.location   || "",
-        wcode:     woItem?.windowCode  || "",
-        typology:  woItem?.typology    || "",
-        series:    woItem?.series      || "",
-        woLnt:     woItem?.length      || "",
-        woHgt:     woItem?.height      || "",
-        sqft:      woItem?.sqft        || "",
-        length:    "",
-        height:    "",
-        jobCard:   "",
+        location:       woItem?.location  || "",
+        wcode:          woItem?.windowCode || woItem?.wcode  || "",
+        typology:       woItem?.typology   || "",
+        series:         woItem?.series     || "",
+        woLnt:          woItem?.length     ?? woItem?.woLnt  ?? "",
+        woHgt:          woItem?.height     ?? woItem?.woHgt  ?? "",
+        sqft:           defaultSqft,
+        length:         "",
+        height:         "",
+        jobCard:        "",
         handoverStatus: "",
     };
     ALL_SECTIONS.forEach(sec => {
@@ -2701,223 +3646,394 @@ const emptyTrackerRow = (srNo = "", flat = "", woItem = null) => {
     return base;
 };
 
-// ── Excel export ──────────────────────────────────────────────────────────────
-function exportExcel(rows, projectName, workOrderNo, towerName) {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet([]);
+// ── Status → auto-fill logic ──────────────────────────────────────────────────
+// R → SUPPLY=sqft, INSTALL=0,    HANDOVER 6 cols=0, HARDWARE=0
+// I → SUPPLY=sqft, INSTALL=sqft, HANDOVER 6 cols=0, HARDWARE=0
+// H → SUPPLY=sqft, INSTALL=sqft, HANDOVER 7 cols=sqft (incl HARDWARE)
+// cleared → all 0
+function applyStatusLogic(row, sub, statusValue) {
+    const sqftVal  = parseFloat(row.sqft) || 0;
+    const v        = statusValue.trim().toLowerCase();
+    const updated  = { ...row, [`STATUS__${sub}`]: statusValue };
 
-    const setS = (ref, s) => {
-        if (!ws[ref]) ws[ref] = { t: "z", v: "" };
-        ws[ref].s = s;
-    };
+    const supplyKey  = `SUPPLY__${sub}`;
+    const installKey = `INSTALLATION__${sub}`;
+    const handoverKey= `HANDOVER__${sub}`; // same sub-col in HANDOVER (6 shared)
 
-    // Column order:
-    // 0-11:  SR NO, FLAT, LOCATION, WCODE, TYPOLOGY, SERIES, WO LNT, WO HGT, SQ FT, LENGTH, HEIGHT, JOB CARD
-    // 12-17: DCNO (6)
-    // 18-23: STATUS (6) — HARDWARE dropped, TOP/BOTTOM FIX kept
-    // 24-29: SUPPLY (6)
-    // 30-35: INSTALLATION (6)
-    // 36:    HANDOVER STATUS
-    const totalCols = 37;
-
-    // Build column letter array (A..AR for 44 cols)
-    const colLetters = [];
-    for (let i = 0; i < totalCols; i++) {
-        if (i < 26) colLetters.push(String.fromCharCode(65 + i));
-        else colLetters.push(
-            String.fromCharCode(64 + Math.floor(i / 26)) +
-            String.fromCharCode(65 + (i % 26))
-        );
+    if (v === "r") {
+        updated[supplyKey]   = sqftVal.toFixed(4);
+        updated[installKey]  = "0";
+        updated[handoverKey] = "0";
+    } else if (v === "i") {
+        updated[supplyKey]   = sqftVal.toFixed(4);
+        updated[installKey]  = sqftVal.toFixed(4);
+        updated[handoverKey] = "0";
+    } else if (v === "h") {
+        updated[supplyKey]   = sqftVal.toFixed(4);
+        updated[installKey]  = sqftVal.toFixed(4);
+        updated[handoverKey] = sqftVal.toFixed(4);
+    } else {
+        updated[supplyKey]   = "0";
+        updated[installKey]  = "0";
+        updated[handoverKey] = "0";
     }
 
-    // ── Totals ────────────────────────────────────────────────────────────────
-    const totalSqft = rows.reduce((s, r) => s + (parseFloat(r.sqft) || 0), 0);
+    // HARDWARE in HANDOVER — fills if ANY status col in this row is H
+    const allStatusCols = STATUS_SUB_COLS.map(s => updated[`STATUS__${s}`] || "");
+    const anyH = allStatusCols.some(sv => sv.trim().toLowerCase() === "h");
+    updated[`HANDOVER__HARDWARE`] = anyH ? sqftVal.toFixed(4) : "0";
 
-    // ── Row 1: Project / WO title ─────────────────────────────────────────────
-    XLSX.utils.sheet_add_aoa(ws,
-        [[`PROJECT: ${projectName || "—"}   |   WO: ${workOrderNo || "—"}   |   Tower: ${towerName || "—"}`]],
-        { origin: "A1" }
-    );
+    return updated;
+}
 
-    // ── Row 2: Section group headers ──────────────────────────────────────────
-    const row2 = new Array(totalCols).fill("");
-    row2[12] = "DC.NO";
-    row2[18] = "STATUS";
-    row2[24] = "SUPPLY";
-    row2[30] = "INSTALLATION";
-    XLSX.utils.sheet_add_aoa(ws, [row2], { origin: "A2" });
+// ── Excel export ──────────────────────────────────────────────────────────────
+// ── Excel export — matches TRacker_book.xlsx format exactly ──────────────────
+function exportExcel(rows, projectName, workOrderNo, towerName) {
+    const wb = XLSX.utils.book_new();
+    const ws = {};
 
-    // ── Row 3: Sub-headers ────────────────────────────────────────────────────
-    const row3 = [
-        "SR NO.", "FLAT", "LOCATION", "WCODE", "TYPOLOGY", "SERIES",
-        "WO LNT", "WO HGT", "SQ FT.", "LENGTH", "HEIGHT", "JOB CARD",
-        ...DCNO_SUB_COLS,      // 6 cols (12-17)
-        ...STATUS_SUB_COLS,    // 6 cols (18-23)
-        ...SUB_COLS,           // SUPPLY 6 cols (24-29)
-        ...SUB_COLS,           // INSTALLATION 6 cols (30-35)
-        "HANDOVER STATUS",     // col 36
-    ];
-    XLSX.utils.sheet_add_aoa(ws, [row3], { origin: "A3" });
+    // ── Column mapping (1-based col index) ───────────────────────────────────
+    // A=1(empty), B=SR NO, C=FLAT, D=LOCATION, E=WCODE, F=TYPOLOGY, G=SERIES
+    // H-J=LENGTH(merged 3), K-M=HEIGHT(merged 3)
+    // N=WO LNT, O=WO HGT, P=SQ FT, Q=LENGTH, R=HEIGHT, S=JOB CARD
+    // T-Y = DCNO (6)       cols 20-25
+    // Z-AF= STATUS (7)     cols 26-32  (Z-AE=6 shared + AF=HARDWARE)
+    // AG-AL= SUPPLY (6)    cols 33-38
+    // AM-AR= INSTALL (6)   cols 39-44
+    // AS    = HANDOVER      col 45  (single col for now matching sample)
+    // NOTE: sample file uses AS as HANDOVER header with no sub-cols visible
+    // but your app has 7 HANDOVER sub-cols — mapping them AS-AY (cols 45-51)
 
-    // ── Rows 4+: Data ─────────────────────────────────────────────────────────
-    const dataRows = rows.map(r => [
-        r.srNo || "", r.flat || "", r.location || "", r.wcode || "",
-        r.typology || "", r.series || "",
-        r.woLnt !== "" ? Number(r.woLnt) : "",
-        r.woHgt !== "" ? Number(r.woHgt) : "",
-        r.sqft  !== "" ? parseFloat(parseFloat(r.sqft).toFixed(2)) : "",
-        r.length !== "" ? Number(r.length) : "",
-        r.height !== "" ? Number(r.height) : "",
-        r.jobCard || "",
-        // DCNO
-        ...DCNO_SUB_COLS.map(sub => r[`DCNO__${sub}`] !== "" ? parseFloat(r[`DCNO__${sub}`] || 0) : ""),
-        // STATUS
-...STATUS_SUB_COLS.map(sub => r[`STATUS__${sub}`] !== "" ? r[`STATUS__${sub}`].trim().toUpperCase() : ""),        // SUPPLY
-        ...SUB_COLS.map(sub => r[`SUPPLY__${sub}`] !== "" ? parseFloat(r[`SUPPLY__${sub}`] || 0) : ""),
-        // INSTALLATION
-        ...SUB_COLS.map(sub => r[`INSTALLATION__${sub}`] !== "" ? parseFloat(r[`INSTALLATION__${sub}`] || 0) : ""),
-        r.handoverStatus || "",
-    ]);
-    XLSX.utils.sheet_add_aoa(ws, dataRows, { origin: "A4" });
+    // Col letter helper
+    const col = (n) => {
+        if (n <= 26) return String.fromCharCode(64 + n);
+        return String.fromCharCode(64 + Math.floor((n - 1) / 26)) +
+               String.fromCharCode(65 + ((n - 1) % 26));
+    };
 
-    // ── Total row ─────────────────────────────────────────────────────────────
-    const totalR = 4 + rows.length;
-    const totalRow = new Array(totalCols).fill("");
-    totalRow[0] = "TOTAL";
-    totalRow[8] = parseFloat(totalSqft.toFixed(2));
-    let ci = 12;
-   ALL_SECTIONS.forEach(sec => {
-       SECTION_SUB_COLS[sec].forEach(sub => {
-           if (sec === "STATUS") {
-               totalRow[ci++] = ""; // STATUS is R/I strings — no numeric total
-           } else {
-               totalRow[ci++] = rows.reduce((s, r) => s + (parseFloat(r[`${sec}__${sub}`]) || 0), 0);
-           }
-       });
-   });
-    XLSX.utils.sheet_add_aoa(ws, [totalRow], { origin: `A${totalR}` });
-
-    // ── Merges ────────────────────────────────────────────────────────────────
-    const r0 = (row) => row - 1;
-    ws["!merges"] = [
-        { s: { r: r0(1), c: 0  }, e: { r: r0(1), c: totalCols - 1 } }, // Row 1 full
-        ...Array.from({ length: 12 }, (_, i) => ({ s: { r: r0(2), c: i }, e: { r: r0(3), c: i } })), // A-L 2-row span
-        { s: { r: r0(2), c: 12 }, e: { r: r0(2), c: 17 } }, // DC.NO (6)
-        { s: { r: r0(2), c: 18 }, e: { r: r0(2), c: 23 } }, // STATUS (6)
-        { s: { r: r0(2), c: 24 }, e: { r: r0(2), c: 29 } }, // SUPPLY (6)
-        { s: { r: r0(2), c: 30 }, e: { r: r0(2), c: 35 } }, // INSTALLATION (6)
-        { s: { r: r0(2), c: 36 }, e: { r: r0(3), c: 36 } }, // HANDOVER 2-row span
-    ];
-
-    // ── Column widths ─────────────────────────────────────────────────────────
-    ws["!cols"] = [
-        { wch: 7  }, { wch: 8  }, { wch: 20 }, { wch: 10 }, { wch: 30 }, { wch: 8  },
-        { wch: 8  }, { wch: 8  }, { wch: 9  }, { wch: 8  }, { wch: 8  }, { wch: 12 },
-        ...Array(6).fill({ wch: 13 }),  // DCNO (6)
-        ...Array(6).fill({ wch: 13 }),  // STATUS (6)
-        ...Array(6).fill({ wch: 13 }),  // SUPPLY (6)
-        ...Array(6).fill({ wch: 13 }),  // INSTALLATION (6)
-        { wch: 14 },                    // HANDOVER
-    ];
-    ws["!rows"] = [{ hpt: 22 }, { hpt: 20 }, { hpt: 32 }];
+    const TOTAL_COLS = 51; // A to AY
+    const dataStartRow = 4;
+    const lastDataRow  = dataStartRow + rows.length - 1;
+    const totalRow     = lastDataRow + 1;
+    const summaryRow   = totalRow + 2;
 
     // ── Style helpers ─────────────────────────────────────────────────────────
-    const bdr = (rgb, style = "thin") => ({ style, color: { rgb } });
-    const allBdr = (rgb) => ({ top: bdr(rgb), bottom: bdr(rgb), left: bdr(rgb), right: bdr(rgb) });
+    const setCell = (ref, value, style) => {
+        ws[ref] = { v: value ?? "", t: typeof value === "number" ? "n" : "s" };
+        if (style) ws[ref].s = style;
+    };
 
-    // Row 1 — title
-    setS("A1", {
-        font:      { bold: true, sz: 13, name: "Calibri", color: { rgb: "1A2940" } },
+    const bdr = (rgb = "A8C4DC", style = "thin") => ({ style, color: { rgb } });
+    const allBdr = (rgb = "A8C4DC") => ({
+        top: bdr(rgb), bottom: bdr(rgb), left: bdr(rgb), right: bdr(rgb)
+    });
+    const medBdr = () => ({
+        top:    bdr("888888", "medium"),
+        bottom: bdr("888888", "medium"),
+        left:   bdr("AAAAAA", "thin"),
+        right:  bdr("AAAAAA", "thin"),
+    });
+
+    // Section colors — matching the sample
+    const SEC = {
+        BASE:         { hdr: "1E3A5F", sub: "2E5F8A", data: ["EBF3FB", "FFFFFF"], text: "FFFFFF" },
+        DCNO:         { hdr: "7D6608", sub: "F9E79F", data: ["FDFDE7", "FEFEF5"], text: "FFFF00" },
+        STATUS:       { hdr: "8B0000", sub: "F1948A", data: ["FDEDEC", "FEF5F5"], text: "FF0000" },
+        SUPPLY:       { hdr: "1A5276", sub: "AED6F1", data: ["EBF5FB", "F8FCFE"], text: "FFFFFF" },
+        INSTALL:      { hdr: "1E8449", sub: "A9DFBF", data: ["E9F7EF", "F4FCF7"], text: "FFFFFF" },
+        HANDOVER:     { hdr: "4A235A", sub: "CE93D8", data: ["F3E5F5", "FAF5FC"], text: "FFFFFF" },
+    };
+
+    const hdrStyle = (sec) => ({
+        font:      { bold: true, sz: 12, name: "Calibri", color: { rgb: sec.text } },
+        fill:      { patternType: "solid", fgColor: { rgb: sec.hdr } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border:    allBdr("000000"),
+    });
+    const subStyle = (sec) => ({
+        font:      { bold: true, sz: 10, name: "Calibri", color: { rgb: "000000" } },
+        fill:      { patternType: "solid", fgColor: { rgb: sec.sub } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border:    allBdr("888888"),
+    });
+    const dataStyle = (sec, isOdd, isNum = false) => ({
+        font:      { sz: 10, name: "Calibri", color: { rgb: "1A2940" } },
+        fill:      { patternType: "solid", fgColor: { rgb: isOdd ? sec.data[0] : sec.data[1] } },
+        alignment: { horizontal: isNum ? "right" : "left", vertical: "center" },
+        border:    allBdr("D8E2EC"),
+    });
+
+    // ── ROW 1: empty spacer ───────────────────────────────────────────────────
+    // ── ROW 2: Title + Section headers ───────────────────────────────────────
+    // Title: B2 (merged B2:S2)
+    setCell("B2", `PROJECT : ${projectName || "—"}   |   WO: ${workOrderNo || "—"}   |   Tower: ${towerName || "—"}`, {
+        font:      { bold: true, sz: 16, name: "Calibri", color: { rgb: "0070C0" } },
         alignment: { horizontal: "center", vertical: "center" },
-        fill:      { patternType: "solid", fgColor: { rgb: "EEF2F7" } },
-        border:    { bottom: bdr("A0B0C8", "medium") },
+        border:    { bottom: bdr("0070C0", "medium") },
     });
 
-    // Section group header colors
-    const secHdr = {
-        base:         { fill: "D6E4F0", text: "1A2940" },
-        DCNO:         { fill: "FCF3CF", text: "7D6608" },
-        STATUS:       { fill: "FADBD8", text: "922B21" },
-        SUPPLY:       { fill: "D6EAF8", text: "1A5276" },
-        INSTALLATION: { fill: "D5F5E3", text: "1E8449" },
-    };
-    const secSub = {
-        base:         "BDD7EE",
-        DCNO:         "F9E79F",
-        STATUS:       "F1948A",
-        SUPPLY:       "AED6F1",
-        INSTALLATION: "A9DFBF",
-    };
+    // Section group headers row 2
+    const secHeaders = [
+        { label: "DC.NO",        startCol: 20, endCol: 25, sec: SEC.DCNO    },
+        { label: "STATUS",       startCol: 26, endCol: 32, sec: SEC.STATUS  },
+        { label: "SUPPLY",       startCol: 33, endCol: 38, sec: SEC.SUPPLY  },
+        { label: "INSTALLATION", startCol: 39, endCol: 44, sec: SEC.INSTALL },
+        { label: "HANDOVER",     startCol: 45, endCol: 51, sec: SEC.HANDOVER},
+    ];
+    secHeaders.forEach(({ label, startCol, sec }) => {
+        setCell(`${col(startCol)}2`, label, hdrStyle(sec));
+    });
 
-    const getSecForCol = (ci) => {
-        if (ci >= 12 && ci <= 17) return "DCNO";
-        if (ci >= 18 && ci <= 23) return "STATUS";
-        if (ci >= 24 && ci <= 29) return "SUPPLY";
-        if (ci >= 30 && ci <= 35) return "INSTALLATION";
-        return "base";
-    };
+    // ── ROW 3: Sub-column headers ─────────────────────────────────────────────
+    const subCols = [
+        // Left fixed cols B-S
+        { c: 2,  label: "SR NO.",          sec: SEC.BASE },
+        { c: 3,  label: "FLAT",            sec: SEC.BASE },
+        { c: 4,  label: "LOCATION",        sec: SEC.BASE },
+        { c: 5,  label: "WCODE",           sec: SEC.BASE },
+        { c: 6,  label: "TYPOLOGY",        sec: SEC.BASE },
+        { c: 7,  label: "SERIES",          sec: SEC.BASE },
+        { c: 8,  label: "LENGTH\n(actual)",sec: SEC.BASE },
+        { c: 11, label: "HEIGHT\n(actual)",sec: SEC.BASE },
+        { c: 14, label: "WO LNT",          sec: SEC.BASE },
+        { c: 15, label: "WO HGT",          sec: SEC.BASE },
+        { c: 16, label: "SQ FT.",          sec: SEC.BASE },
+        { c: 17, label: "LENGTH",          sec: SEC.BASE },
+        { c: 18, label: "HEIGHT",          sec: SEC.BASE },
+        { c: 19, label: "JOB CARD",        sec: SEC.BASE },
+        // DCNO T-Y (cols 20-25)
+        { c: 20, label: "FRAME",           sec: SEC.DCNO },
+        { c: 21, label: "DOOR FRAME",      sec: SEC.DCNO },
+        { c: 22, label: "SHUTTER",         sec: SEC.DCNO },
+        { c: 23, label: "OPENABLE DOOR",   sec: SEC.DCNO },
+        { c: 24, label: "FIX GLASS",       sec: SEC.DCNO },
+        { c: 25, label: "TOP/BOTTOM FIX",  sec: SEC.DCNO },
+        // STATUS Z-AF (cols 26-32, 7 cols incl HARDWARE)
+        { c: 26, label: "FRAME",           sec: SEC.STATUS },
+        { c: 27, label: "DOOR FRAME",      sec: SEC.STATUS },
+        { c: 28, label: "SHUTTER",         sec: SEC.STATUS },
+        { c: 29, label: "OPENABLE DOOR",   sec: SEC.STATUS },
+        { c: 30, label: "FIX GLASS",       sec: SEC.STATUS },
+        { c: 31, label: "TOP/BOTTOM FIX",  sec: SEC.STATUS },
+        { c: 32, label: "HARDWARE",        sec: SEC.STATUS },
+        // SUPPLY AG-AL (cols 33-38)
+        { c: 33, label: "FRAME",           sec: SEC.SUPPLY },
+        { c: 34, label: "DOOR FRAME",      sec: SEC.SUPPLY },
+        { c: 35, label: "SHUTTER",         sec: SEC.SUPPLY },
+        { c: 36, label: "OPENABLE DOOR",   sec: SEC.SUPPLY },
+        { c: 37, label: "FIX GLASS",       sec: SEC.SUPPLY },
+        { c: 38, label: "TOP/BOTTOM FIX",  sec: SEC.SUPPLY },
+        // INSTALLATION AM-AR (cols 39-44)
+        { c: 39, label: "FRAME",           sec: SEC.INSTALL },
+        { c: 40, label: "DOOR FRAME",      sec: SEC.INSTALL },
+        { c: 41, label: "SHUTTER",         sec: SEC.INSTALL },
+        { c: 42, label: "OPENABLE DOOR",   sec: SEC.INSTALL },
+        { c: 43, label: "FIX GLASS",       sec: SEC.INSTALL },
+        { c: 44, label: "TOP/BOTTOM FIX",  sec: SEC.INSTALL },
+        // HANDOVER AS-AY (cols 45-51, 7 cols incl HARDWARE)
+        { c: 45, label: "FRAME",           sec: SEC.HANDOVER },
+        { c: 46, label: "DOOR FRAME",      sec: SEC.HANDOVER },
+        { c: 47, label: "SHUTTER",         sec: SEC.HANDOVER },
+        { c: 48, label: "OPENABLE DOOR",   sec: SEC.HANDOVER },
+        { c: 49, label: "FIX GLASS",       sec: SEC.HANDOVER },
+        { c: 50, label: "TOP/BOTTOM FIX",  sec: SEC.HANDOVER },
+        { c: 51, label: "HARDWARE",        sec: SEC.HANDOVER },
+    ];
+    subCols.forEach(({ c: ci, label, sec }) => {
+        setCell(`${col(ci)}3`, label, subStyle(sec));
+    });
 
-    // Row 2 group headers
-    colLetters.forEach((col, i) => {
-        const sec = getSecForCol(i);
-        const c   = secHdr[sec];
-        setS(`${col}2`, {
-            font:      { bold: true, sz: 9, name: "Calibri", color: { rgb: c.text } },
-            alignment: { horizontal: "center", vertical: "center", wrapText: true },
-            fill:      { patternType: "solid", fgColor: { rgb: c.fill } },
-            border:    allBdr("A8C4DC"),
+    // ── ROWS 4+: Data ─────────────────────────────────────────────────────────
+    const SUB_KEYS = ["FRAME", "DOOR FRAME", "SHUTTER", "OPENABLE DOOR", "FIX GLASS", "TOP / BOTTOM FIX"];
+
+    rows.forEach((r, idx) => {
+        const excelRow = dataStartRow + idx;
+        const isOdd    = idx % 2 === 1;
+
+        const dc = (ci, val, sec, isNum = false) =>
+            setCell(`${col(ci)}${excelRow}`, val, dataStyle(sec, isOdd, isNum));
+
+        // Left fixed cols
+        dc(2,  r.srNo    || "",                          SEC.BASE       );
+        dc(3,  r.flat    || "",                          SEC.BASE       );
+        dc(4,  r.location|| "",                          SEC.BASE       );
+        dc(5,  r.wcode   || "",                          SEC.BASE       );
+        dc(6,  r.typology|| "",                          SEC.BASE       );
+        dc(7,  r.series  || "",                          SEC.BASE       );
+        dc(8,  r.length  ? Number(r.length)  : "",      SEC.BASE, true );
+        dc(11, r.height  ? Number(r.height)  : "",      SEC.BASE, true );
+        dc(14, r.woLnt   ? Number(r.woLnt)   : "",      SEC.BASE, true );
+        dc(15, r.woHgt   ? Number(r.woHgt)   : "",      SEC.BASE, true );
+        dc(16, r.sqft    ? parseFloat(parseFloat(r.sqft).toFixed(4)) : 0, SEC.BASE, true);
+        dc(17, r.length  ? Number(r.length)  : "",      SEC.BASE, true );
+        dc(18, r.height  ? Number(r.height)  : "",      SEC.BASE, true );
+        dc(19, r.jobCard || "",                          SEC.BASE       );
+
+        // DCNO cols 20-25
+        SUB_KEYS.forEach((sub, si) => {
+            const val = r[`DCNO__${sub}`];
+            dc(20 + si, val !== "" ? parseFloat(val || 0) : 0, SEC.DCNO, true);
         });
-    });
 
-    // Row 3 sub-headers
-    colLetters.forEach((col, i) => {
-        const sec = getSecForCol(i);
-        setS(`${col}3`, {
-            font:      { bold: true, sz: 8, name: "Calibri", color: { rgb: "000000" } },
-            alignment: { horizontal: "center", vertical: "center", wrapText: true },
-            fill:      { patternType: "solid", fgColor: { rgb: secSub[sec] } },
-            border:    allBdr("A8C4DC"),
+        // STATUS cols 26-32 (6 shared + HARDWARE at 32)
+        SUB_KEYS.forEach((sub, si) => {
+            const val = r[`STATUS__${sub}`];
+            dc(26 + si, val ? val.trim().toUpperCase() : "", SEC.STATUS);
         });
+        // HARDWARE in STATUS — blank (not applicable in STATUS)
+        dc(32, "", SEC.STATUS);
+
+        // SUPPLY cols 33-38
+        SUB_KEYS.forEach((sub, si) => {
+            const val = r[`SUPPLY__${sub}`];
+            dc(33 + si, val !== "" ? parseFloat(val || 0) : 0, SEC.SUPPLY, true);
+        });
+
+        // INSTALLATION cols 39-44
+        SUB_KEYS.forEach((sub, si) => {
+            const val = r[`INSTALLATION__${sub}`];
+            dc(39 + si, val !== "" ? parseFloat(val || 0) : 0, SEC.INSTALL, true);
+        });
+
+        // HANDOVER cols 45-51 (6 shared + HARDWARE at 51)
+        SUB_KEYS.forEach((sub, si) => {
+            const val = r[`HANDOVER__${sub}`];
+            dc(45 + si, val !== "" ? parseFloat(val || 0) : 0, SEC.HANDOVER, true);
+        });
+        const hwVal = r[`HANDOVER__HARDWARE`];
+        dc(51, hwVal !== "" ? parseFloat(hwVal || 0) : 0, SEC.HANDOVER, true);
     });
 
-    // Data rows
-    const dataTint = {
-        base:         ["F0F4F8", "FFFFFF"],
-        DCNO:         ["FDFDE7", "FEFEF5"],
-        STATUS:       ["FDEDEC", "FEF5F5"],
-        SUPPLY:       ["EBF5FB", "F8FCFE"],
-        INSTALLATION: ["E9F7EF", "F4FCF7"],
+    // ── TOTAL ROW ─────────────────────────────────────────────────────────────
+    const totalStyle = (isNum = false) => ({
+        font:      { bold: true, sz: 10, name: "Calibri", color: { rgb: "1A2940" } },
+        fill:      { patternType: "solid", fgColor: { rgb: "D9D9D9" } },
+        alignment: { horizontal: isNum ? "right" : "center", vertical: "center" },
+        border:    medBdr(),
+    });
+
+    setCell(`${col(2)}${totalRow}`, "TOTAL", totalStyle());
+    setCell(`${col(16)}${totalRow}`,
+        parseFloat(rows.reduce((s, r) => s + (parseFloat(r.sqft) || 0), 0).toFixed(4)),
+        totalStyle(true)
+    );
+
+    // DCNO totals
+    SUB_KEYS.forEach((sub, si) => {
+        const t = rows.reduce((s, r) => s + (parseFloat(r[`DCNO__${sub}`]) || 0), 0);
+        setCell(`${col(20 + si)}${totalRow}`, parseFloat(t.toFixed(4)), totalStyle(true));
+    });
+    // SUPPLY totals
+    SUB_KEYS.forEach((sub, si) => {
+        const t = rows.reduce((s, r) => s + (parseFloat(r[`SUPPLY__${sub}`]) || 0), 0);
+        setCell(`${col(33 + si)}${totalRow}`, parseFloat(t.toFixed(4)), totalStyle(true));
+    });
+    // INSTALLATION totals
+    SUB_KEYS.forEach((sub, si) => {
+        const t = rows.reduce((s, r) => s + (parseFloat(r[`INSTALLATION__${sub}`]) || 0), 0);
+        setCell(`${col(39 + si)}${totalRow}`, parseFloat(t.toFixed(4)), totalStyle(true));
+    });
+    // HANDOVER totals
+    SUB_KEYS.forEach((sub, si) => {
+        const t = rows.reduce((s, r) => s + (parseFloat(r[`HANDOVER__${sub}`]) || 0), 0);
+        setCell(`${col(45 + si)}${totalRow}`, parseFloat(t.toFixed(4)), totalStyle(true));
+    });
+    const hwTotal = rows.reduce((s, r) => s + (parseFloat(r[`HANDOVER__HARDWARE`]) || 0), 0);
+    setCell(`${col(51)}${totalRow}`, parseFloat(hwTotal.toFixed(4)), totalStyle(true));
+
+    // ── SUMMARY ROW (matches sample row 26) ───────────────────────────────────
+    const summStyle = {
+        font:      { bold: true, sz: 10, name: "Calibri", color: { rgb: "1A2940" } },
+        fill:      { patternType: "solid", fgColor: { rgb: "FFF2CC" } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border:    allBdr("AAAAAA"),
     };
+    const totalSqft    = rows.reduce((s, r) => s + (parseFloat(r.sqft) || 0), 0);
+    const totalWindows = rows.length;
+    const measReceived = rows.filter(r => r.length && r.height).length;
 
-    dataRows.forEach((_, ri) => {
-        const excelR = ri + 4;
-        const isOdd  = ri % 2 === 1;
-        colLetters.forEach((col, i) => {
-            const sec    = getSecForCol(i);
-            const colors = dataTint[sec];
-            setS(`${col}${excelR}`, {
-                font:      { sz: 9, name: "Calibri", color: { rgb: "1A2940" } },
-                alignment: { horizontal: i >= 6 ? "right" : i <= 1 ? "center" : "left", vertical: "center" },
-                fill:      { patternType: "solid", fgColor: { rgb: isOdd ? colors[0] : colors[1] } },
-                border:    allBdr("D8E2EC"),
-            });
-        });
-    });
+    setCell(`${col(14)}${summaryRow}`, "TOTAL WINDOW QUANTITY",   summStyle);
+    setCell(`${col(15)}${summaryRow}`, totalWindows,              summStyle);
+    setCell(`${col(17)}${summaryRow}`, "TOTAL MEASUREMENT RECEIVED", summStyle);
+    setCell(`${col(18)}${summaryRow}`, measReceived,              summStyle);
+    setCell(`${col(33)}${summaryRow}`, "TOTAL FRAME SUPPLIED",    summStyle);
+    const supplyFrameTotal = rows.reduce((s, r) => s + (parseFloat(r[`SUPPLY__FRAME`]) || 0), 0);
+    setCell(`${col(37)}${summaryRow}`, parseFloat(supplyFrameTotal.toFixed(4)), summStyle);
+    setCell(`${col(39)}${summaryRow}`, "TOTAL FRAME INSTALLED",   summStyle);
+    const installFrameTotal = rows.reduce((s, r) => s + (parseFloat(r[`INSTALLATION__FRAME`]) || 0), 0);
+    setCell(`${col(44)}${summaryRow}`, parseFloat(installFrameTotal.toFixed(4)), summStyle);
+    setCell(`${col(45)}${summaryRow}`, "TOTAL WINDOW HANDOVER",   summStyle);
+    const handoverTotal = rows.reduce((s, r) => s + (parseFloat(r[`HANDOVER__FRAME`]) || 0), 0);
+    setCell(`${col(51)}${summaryRow}`, parseFloat(handoverTotal.toFixed(4)), summStyle);
 
-    // Total row
-    colLetters.forEach((col, i) => {
-        setS(`${col}${totalR}`, {
-            font:      { bold: true, sz: 9, name: "Calibri", color: { rgb: "1A2940" } },
-            alignment: { horizontal: i >= 6 ? "right" : "center", vertical: "center" },
-            fill:      { patternType: "solid", fgColor: { rgb: "D9D9D9" } },
-            border:    {
-                top:    bdr("888888", "medium"),
-                bottom: bdr("888888", "medium"),
-                left:   bdr("AAAAAA"),
-                right:  bdr("AAAAAA"),
-            },
-        });
-    });
+    // ── MERGES ────────────────────────────────────────────────────────────────
+    const r0 = (row) => row - 1;
+    ws["!merges"] = [
+        // Row 2: Title spans B-S
+        { s: { r: r0(2), c: 1  }, e: { r: r0(2), c: 18 } },
+        // Row 2: Section group headers (merge row 2 only, row 3 has sub-cols)
+        { s: { r: r0(2), c: 19 }, e: { r: r0(2), c: 24 } }, // DCNO
+        { s: { r: r0(2), c: 25 }, e: { r: r0(2), c: 31 } }, // STATUS (7)
+        { s: { r: r0(2), c: 32 }, e: { r: r0(2), c: 37 } }, // SUPPLY
+        { s: { r: r0(2), c: 38 }, e: { r: r0(2), c: 43 } }, // INSTALLATION
+        { s: { r: r0(2), c: 44 }, e: { r: r0(2), c: 50 } }, // HANDOVER (7)
+        // Row 2+3: Left cols span both rows (B-S each span 2 rows)
+        ...Array.from({ length: 18 }, (_, i) => ({
+            s: { r: r0(2), c: 1 + i },
+            e: { r: r0(3), c: 1 + i }
+        })),
+        // LENGTH actual spans H-J (cols 8-10)
+        { s: { r: r0(3), c: 7  }, e: { r: r0(3), c: 9  } },
+        // HEIGHT actual spans K-M (cols 11-13)
+        { s: { r: r0(3), c: 10 }, e: { r: r0(3), c: 12 } },
+    ];
+
+    // ── COLUMN WIDTHS ─────────────────────────────────────────────────────────
+    ws["!cols"] = [
+        { wch: 4  }, // A — empty
+        { wch: 6  }, // B — SR NO
+        { wch: 8  }, // C — FLAT
+        { wch: 22 }, // D — LOCATION
+        { wch: 10 }, // E — WCODE
+        { wch: 32 }, // F — TYPOLOGY
+        { wch: 8  }, // G — SERIES
+        { wch: 8  }, // H — LENGTH (actual) start
+        { wch: 4  }, // I — merged
+        { wch: 4  }, // J — merged
+        { wch: 8  }, // K — HEIGHT (actual) start
+        { wch: 4  }, // L — merged
+        { wch: 4  }, // M — merged
+        { wch: 8  }, // N — WO LNT
+        { wch: 8  }, // O — WO HGT
+        { wch: 10 }, // P — SQ FT
+        { wch: 8  }, // Q — LENGTH
+        { wch: 8  }, // R — HEIGHT
+        { wch: 12 }, // S — JOB CARD
+        // DCNO (6)
+        ...Array(6).fill({ wch: 12 }),
+        // STATUS (7)
+        ...Array(7).fill({ wch: 12 }),
+        // SUPPLY (6)
+        ...Array(6).fill({ wch: 12 }),
+        // INSTALLATION (6)
+        ...Array(6).fill({ wch: 12 }),
+        // HANDOVER (7)
+        ...Array(7).fill({ wch: 12 }),
+    ];
+
+    // ── ROW HEIGHTS ───────────────────────────────────────────────────────────
+    ws["!rows"] = [
+        { hpt: 24   }, // Row 1 — spacer
+        { hpt: 46.8 }, // Row 2 — title + section headers
+        { hpt: 117.6}, // Row 3 — sub-headers (tall for wrapped text)
+        ...Array(rows.length).fill({ hpt: 23.4 }), // data rows
+        { hpt: 23.4 }, // total row
+        { hpt: 23.4 }, // blank
+        { hpt: 46.8 }, // summary row
+    ];
+
+    // ── SET WORKSHEET DIMENSIONS ──────────────────────────────────────────────
+    ws["!ref"] = `A1:${col(TOTAL_COLS)}${summaryRow}`;
 
     XLSX.utils.book_append_sheet(wb, ws, "Tracker");
     XLSX.writeFile(wb, `Tracker_${projectName || "export"}_${workOrderNo || ""}.xlsx`);
@@ -2927,21 +4043,20 @@ function exportExcel(rows, projectName, workOrderNo, towerName) {
 export default function TrackerFormPage() {
     const navigate = useNavigate();
 
-    const [projects,        setProjects]       = useState([]);
+    const [projects,        setProjects]        = useState([]);
     const [selectedProject, setSelectedProject] = useState(null);
-    const [workOrders,      setWorkOrders]      = useState([]);
-    const [selectedWO,      setSelectedWO]      = useState(null);
-    const [search,          setSearch]          = useState("");
+    const [workOrders,      setWorkOrders]       = useState([]);
+    const [selectedWO,      setSelectedWO]       = useState(null);
+    const [search,          setSearch]           = useState("");
     const [loadingProjects, setLoadingProjects]  = useState(true);
     const [loadingWOs,      setLoadingWOs]       = useState(false);
     const [loadingRows,     setLoadingRows]      = useState(false);
-    const [rows,            setRows]            = useState([]);
-    const [saveMsg,         setSaveMsg]         = useState(null);
-    const [saving,          setSaving]          = useState(false);
-    const [sheetId,         setSheetId]         = useState(null);
-    const [step,            setStep]            = useState("project");
+    const [rows,            setRows]             = useState([]);
+    const [saveMsg,         setSaveMsg]          = useState(null);
+    const [saving,          setSaving]           = useState(false);
+    const [sheetId,         setSheetId]          = useState(null);
+    const [step,            setStep]             = useState("project");
 
-    // Load projects
     useEffect(() => {
         fetch(`${process.env.REACT_APP_API_URL}/projects`)
             .then(r => r.json())
@@ -2976,7 +4091,6 @@ export default function TrackerFormPage() {
         setSheetId(null);
         setSaveMsg(null);
         try {
-            // Fetch info sheets to get flat numbers
             const sheetRes = await fetch(
                 `${process.env.REACT_APP_API_URL}/api/info-sheets/by-work-order/${wo.id}`
             );
@@ -2985,9 +4099,8 @@ export default function TrackerFormPage() {
             const flatList = sheet
                 ? (sheet.flats || []).map(f => ({ flatNo: f.flatNo, items: f.items || [] }))
                 : [];
-            const woItems  = wo.items || [];
+            const woItems = wo.items || [];
 
-            // Build tracker rows
             const trackerRows = [];
             let srNo = 1;
             if (flatList.length > 0) {
@@ -3005,7 +4118,7 @@ export default function TrackerFormPage() {
                 woItems.forEach(item => trackerRows.push(emptyTrackerRow(srNo++, "", item)));
             }
 
-            // Check if tracker sheet already exists — restore saved values
+            // Restore saved tracker sheet
             try {
                 const tsRes = await fetch(
                     `${process.env.REACT_APP_API_URL}/api/tracker-sheets/by-work-order/${wo.id}`
@@ -3014,47 +4127,33 @@ export default function TrackerFormPage() {
                     const tsData = await tsRes.json();
                     setSheetId(tsData.id);
                     if (tsData.rows && tsData.rows.length > 0) {
-                       const restored = trackerRows.map((row, idx) => {
-                           const saved = tsData.rows[idx];
-                           if (!saved) return row;
-                           const r = { ...row };
-                           r.length         = saved.length         ?? "";
-                           r.height         = saved.height         ?? "";
-                           r.jobCard        = saved.jobCard        || "";
-                           r.handoverStatus = saved.handoverStatus || "";
+                        const restored = trackerRows.map((row, idx) => {
+                            const saved = tsData.rows[idx];
+                            if (!saved) return row;
+                            const r = { ...row };
 
-                           // Restore DCNO fields
-                           SECTION_SUB_COLS["DCNO"].forEach(sub => {
-                               const fkey  = `DCNO__${sub}`;
-                               const dbKey = `dcno${SUB_SUFFIX[sub]}`;
-                               r[fkey] = saved[dbKey] ?? "";
-                           });
+                            r.length = saved.length ?? "";
+                            r.height = saved.height ?? "";
+                            if (r.length && r.height) {
+                                const newSqft = calcSqft(r.length, r.height);
+                                if (newSqft) r.sqft = newSqft;
+                            }
+                            r.jobCard        = saved.jobCard        || "";
+                            r.handoverStatus = saved.handoverStatus || "";
 
-                           // Restore STATUS and re-derive SUPPLY/INSTALLATION from it
-                           SECTION_SUB_COLS["STATUS"].forEach(sub => {
-                               const statusFkey  = `STATUS__${sub}`;
-                               const supplyFkey  = `SUPPLY__${sub}`;
-                               const installFkey = `INSTALLATION__${sub}`;
-                               const statusVal   = saved[`status${SUB_SUFFIX[sub]}`] || "";
-                               const sqftVal     = parseFloat(r.sqft) || 0;
-                               const v           = statusVal.trim().toLowerCase();
+                            // Restore DCNO
+                            SECTION_SUB_COLS["DCNO"].forEach(sub => {
+                                r[`DCNO__${sub}`] = saved[`dcno${SUB_SUFFIX[sub]}`] ?? "";
+                            });
 
-                               r[statusFkey] = statusVal;
+                            // Restore STATUS → re-derive all auto cols including HARDWARE
+                            SECTION_SUB_COLS["STATUS"].forEach(sub => {
+                                const statusVal = saved[`status${SUB_SUFFIX[sub]}`] || "";
+                                Object.assign(r, applyStatusLogic(r, sub, statusVal));
+                            });
 
-                               if (v === "r") {
-                                   r[supplyFkey]  = sqftVal.toFixed(4);
-                                   r[installFkey] = "0";
-                               } else if (v === "i") {
-                                   r[supplyFkey]  = sqftVal.toFixed(4);
-                                   r[installFkey] = sqftVal.toFixed(4);
-                               } else {
-                                   r[supplyFkey]  = saved[`supply${SUB_SUFFIX[sub]}`] ?? "";
-                                   r[installFkey] = saved[`install${SUB_SUFFIX[sub]}`] ?? "";
-                               }
-                           });
-
-                           return r;
-                       });
+                            return r;
+                        });
                         setRows(restored);
                     } else {
                         setRows(trackerRows);
@@ -3079,36 +4178,33 @@ export default function TrackerFormPage() {
     const updateRow = (_id, field, value) =>
         setRows(prev => prev.map(r => {
             if (r._id !== _id) return r;
-            const updated = { ...r, [field]: value };
 
-            // ── STATUS → SUPPLY / INSTALLATION auto-fill logic ────────────────
-            // If field is a STATUS sub-col (STATUS__FRAME, STATUS__DOOR FRAME etc.)
             if (field.startsWith("STATUS__")) {
-                const sub = field.replace("STATUS__", ""); // e.g. "FRAME"
-                const supplyKey  = `SUPPLY__${sub}`;
-                const installKey = `INSTALLATION__${sub}`;
-                const sqftVal    = parseFloat(r.sqft) || 0;
-                const v          = value.trim().toLowerCase();
-
-                if (v === "r") {
-                    // R — fill SUPPLY with sqft only
-                    updated[supplyKey]  = sqftVal.toFixed(4);
-                    updated[installKey] = "0";
-                } else if (v === "i") {
-                    // I — fill BOTH SUPPLY and INSTALLATION with sqft
-                    updated[supplyKey]  = sqftVal.toFixed(4);
-                    updated[installKey] = sqftVal.toFixed(4);
-                } else {
-                    // Cleared — reset both to 0
-                    updated[supplyKey]  = "0";
-                    updated[installKey] = "0";
-                }
+                const sub = field.replace("STATUS__", "");
+                return applyStatusLogic(r, sub, value);
             }
 
-            return updated;
+            if (field === "length" || field === "height") {
+                const updated = { ...r, [field]: value };
+                const l       = field === "length" ? value : r.length;
+                const h       = field === "height" ? value : r.height;
+                const newSqft = calcSqft(l, h);
+                if (newSqft) {
+                    updated.sqft = newSqft;
+                    // Re-apply all STATUS to refresh SUPPLY/INSTALL/HANDOVER with new sqft
+                    let withNewSqft = updated;
+                    STATUS_SUB_COLS.forEach(sub => {
+                        const sv = r[`STATUS__${sub}`] || "";
+                        if (sv) withNewSqft = applyStatusLogic(withNewSqft, sub, sv);
+                    });
+                    return withNewSqft;
+                }
+                return updated;
+            }
+
+            return { ...r, [field]: value };
         }));
 
-    // Save to DB
     const handleSave = async () => {
         setSaving(true);
         setSaveMsg(null);
@@ -3121,24 +4217,25 @@ export default function TrackerFormPage() {
                 const row = {
                     srNo: r.srNo, flat: r.flat, location: r.location,
                     wcode: r.wcode, typology: r.typology, series: r.series,
-                    woLnt: r.woLnt || null, woHgt: r.woHgt || null, sqft: r.sqft || null,
+                    woLnt:  r.woLnt  || null, woHgt: r.woHgt || null,
+                    sqft:   r.sqft   || null,
                     length: r.length || null, height: r.height || null,
                     jobCard: r.jobCard || null,
                     handoverStatus: r.handoverStatus || null,
                 };
-             ALL_SECTIONS.forEach(sec => {
-                 if (sec === "SUPPLY" || sec === "INSTALLATION") return;
-                 const prefix = DB_PREFIX[sec];
-                 SECTION_SUB_COLS[sec].forEach(sub => {
-                     const fkey  = `${sec}__${sub}`;
-                     const dbKey = `${prefix}${SUB_SUFFIX[sub]}`;
-                     if (sec === "STATUS") {
-                         row[dbKey] = r[fkey] !== "" ? r[fkey].trim().toUpperCase() : null;
-                     } else {
-                         row[dbKey] = r[fkey] !== "" ? parseFloat(r[fkey]) || null : null;
-                     }
-                 });
-             });
+                // Only send DCNO and STATUS — backend recalculates SUPPLY/INSTALL/HANDOVER
+                ["DCNO", "STATUS"].forEach(sec => {
+                    const prefix = DB_PREFIX[sec];
+                    SECTION_SUB_COLS[sec].forEach(sub => {
+                        const fkey  = `${sec}__${sub}`;
+                        const dbKey = `${prefix}${SUB_SUFFIX[sub]}`;
+                        if (sec === "STATUS") {
+                            row[dbKey] = r[fkey] !== "" ? r[fkey].trim().toUpperCase() : null;
+                        } else {
+                            row[dbKey] = r[fkey] !== "" ? parseFloat(r[fkey]) || null : null;
+                        }
+                    });
+                });
                 return row;
             }),
         };
@@ -3176,21 +4273,22 @@ export default function TrackerFormPage() {
         STATUS:       { bg: "#FDEDEC", hdr: "#F1948A", text: "#922B21" },
         SUPPLY:       { bg: "#EBF5FB", hdr: "#AED6F1", text: "#1A5276" },
         INSTALLATION: { bg: "#E9F7EF", hdr: "#A9DFBF", text: "#1E8449" },
+        HANDOVER:     { bg: "#F3E5F5", hdr: "#CE93D8", text: "#4A235A" },
     };
 
     const LEFT_COLS = [
-        { key: "srNo",     label: "SR NO.",    w: 55,  auto: true },
-        { key: "flat",     label: "FLAT",      w: 70,  auto: true },
-        { key: "location", label: "LOCATION",  w: 140, auto: true },
-        { key: "wcode",    label: "WCODE",     w: 90,  auto: true },
-        { key: "typology", label: "TYPOLOGY",  w: 200, auto: true },
-        { key: "series",   label: "SERIES",    w: 80,  auto: true },
-        { key: "woLnt",    label: "WO LNT",    w: 75,  auto: true },
-        { key: "woHgt",    label: "WO HGT",    w: 75,  auto: true },
-        { key: "sqft",     label: "SQ FT.",    w: 80,  auto: true },
-        { key: "length",   label: "LENGTH",    w: 80  },
-        { key: "height",   label: "HEIGHT",    w: 80  },
-        { key: "jobCard",  label: "JOB CARD",  w: 100 },
+        { key: "srNo",    label: "SR NO.",   w: 55,  auto: true },
+        { key: "flat",    label: "FLAT",     w: 70,  auto: true },
+        { key: "location",label: "LOCATION", w: 140, auto: true },
+        { key: "wcode",   label: "WCODE",    w: 90,  auto: true },
+        { key: "typology",label: "TYPOLOGY", w: 200, auto: true },
+        { key: "series",  label: "SERIES",   w: 80,  auto: true },
+        { key: "woLnt",   label: "WO LNT",   w: 75,  auto: true },
+        { key: "woHgt",   label: "WO HGT",   w: 75,  auto: true },
+        { key: "sqft",    label: "SQ FT.",   w: 80,  auto: true },
+        { key: "length",  label: "LENGTH",   w: 80 },
+        { key: "height",  label: "HEIGHT",   w: 80 },
+        { key: "jobCard", label: "JOB CARD", w: 100 },
     ];
 
     // ── Selection screen ──────────────────────────────────────────────────────
@@ -3202,14 +4300,12 @@ export default function TrackerFormPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={css.headerIcon}><FaLayerGroup /></div>
                         <div>
-                            <h1 style={css.pageTitle}>Production Tracker</h1>
+                            <h1 style={css.pageTitle}>Project Tracker</h1>
                             <p style={css.pageSubtitle}>Select project → work order → fill tracker data</p>
                         </div>
                     </div>
                 </div>
-
                 <div style={css.selectionPanels}>
-                    {/* Projects */}
                     <div style={css.selPanel}>
                         <div style={css.selPanelHeader}>
                             <FaBuilding style={{ color: "#0ea5e9", marginRight: 8 }} />
@@ -3224,19 +4320,15 @@ export default function TrackerFormPage() {
                             {loadingProjects ? (
                                 <div style={css.centerMsg}><FaSpinner style={{ animation: "spin 1s linear infinite" }} />&nbsp;Loading…</div>
                             ) : filtered.map(p => (
-                                <div
-                                    key={p.projectId}
+                                <div key={p.projectId}
                                     style={{ ...css.selItem, ...(selectedProject?.projectId === p.projectId ? css.selItemActive : {}) }}
-                                    onClick={() => handleSelectProject(p)}
-                                >
+                                    onClick={() => handleSelectProject(p)}>
                                     <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{p.projectName}</div>
                                     <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{p.projectCode}</div>
                                 </div>
                             ))}
                         </div>
                     </div>
-
-                    {/* Work Orders */}
                     <div style={css.selPanel}>
                         <div style={css.selPanelHeader}>
                             <FaClipboardList style={{ color: "#8b5cf6", marginRight: 8 }} />
@@ -3252,11 +4344,9 @@ export default function TrackerFormPage() {
                             ) : workOrders.length === 0 ? (
                                 <div style={css.centerMsg}>No work orders found</div>
                             ) : workOrders.map(wo => (
-                                <div
-                                    key={wo.id}
+                                <div key={wo.id}
                                     style={{ ...css.selItem, ...(selectedWO?.id === wo.id ? css.selItemActive : {}) }}
-                                    onClick={() => handleSelectWO(wo)}
-                                >
+                                    onClick={() => handleSelectWO(wo)}>
                                     <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{wo.workOrderNo}</div>
                                     <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
                                         {wo.towerName && <span style={css.towerBadge}>{wo.towerName}</span>}
@@ -3267,7 +4357,6 @@ export default function TrackerFormPage() {
                         </div>
                     </div>
                 </div>
-
                 {loadingRows && (
                     <div style={css.centerMsg}>
                         <FaSpinner style={{ animation: "spin 1s linear infinite", marginRight: 8 }} />
@@ -3278,7 +4367,7 @@ export default function TrackerFormPage() {
         );
     }
 
-    // ── Tracker form ──────────────────────────────────────────────────────────
+    // ── Tracker table ─────────────────────────────────────────────────────────
     return (
         <div style={css.page}>
             <style>{`
@@ -3292,7 +4381,6 @@ export default function TrackerFormPage() {
                 input[type=number] { -moz-appearance: textfield; }
             `}</style>
 
-            {/* Header */}
             <div style={css.pageHeader}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <button style={css.backBtn} onClick={() => {
@@ -3301,7 +4389,7 @@ export default function TrackerFormPage() {
                     }}>
                         <FaRegArrowAltCircleLeft /> Back to Selection
                     </button>
-                    <h1 style={css.pageTitle}>Production Tracker</h1>
+                    <h1 style={css.pageTitle}>Project Tracker</h1>
                     <div style={css.metaLine}>
                         <span style={css.projBadge}>{selectedProject?.projectName}</span>
                         <span style={css.woBadge}>{selectedWO?.workOrderNo}</span>
@@ -3310,22 +4398,13 @@ export default function TrackerFormPage() {
                         {sheetId && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Saved</span>}
                     </div>
                 </div>
-
                 <div style={{ display: "flex", gap: 10 }}>
-                    <button
-                        className="save-btn"
-                        style={css.saveBtn}
-                        onClick={handleSave}
-                        disabled={saving}
-                    >
+                    <button className="save-btn" style={css.saveBtn} onClick={handleSave} disabled={saving}>
                         {saving ? <FaSpinner style={{ animation: "spin 1s linear infinite" }} /> : <FaSave style={{ fontSize: 14 }} />}
                         <span>{saving ? "Saving…" : sheetId ? "Update" : "Save"}</span>
                     </button>
-                    <button
-                        className="dl-btn"
-                        style={css.excelBtn}
-                        onClick={() => exportExcel(rows, selectedProject?.projectName, selectedWO?.workOrderNo, selectedWO?.towerName)}
-                    >
+                    <button className="dl-btn" style={css.excelBtn}
+                        onClick={() => exportExcel(rows, selectedProject?.projectName, selectedWO?.workOrderNo, selectedWO?.towerName)}>
                         <FaFileExcel style={{ fontSize: 15 }} />
                         <span>Download Excel</span>
                     </button>
@@ -3339,12 +4418,10 @@ export default function TrackerFormPage() {
                 </div>
             )}
 
-            {/* Table */}
             <div style={css.tableCard}>
                 <div style={{ overflowX: "auto" }}>
                     <table style={{ borderCollapse: "collapse", fontSize: 11, whiteSpace: "nowrap" }}>
                         <thead>
-                            {/* Row 1: Section group headers */}
                             <tr>
                                 {LEFT_COLS.map(col => (
                                     <th key={col.key} rowSpan={2}
@@ -3361,11 +4438,10 @@ export default function TrackerFormPage() {
                                         style={{
                                             ...css.th,
                                             background: sectionColors[sec].hdr,
-                                            color: sectionColors[sec].text,
-                                            textAlign: "center",
+                                            color:      sectionColors[sec].text,
+                                            textAlign:  "center",
                                             fontWeight: 800,
-                                            fontSize: 12,
-                                            letterSpacing: "0.05em",
+                                            fontSize:   12,
                                         }}>
                                         {sec === "DCNO" ? "DC.NO" : sec}
                                     </th>
@@ -3374,23 +4450,21 @@ export default function TrackerFormPage() {
                                     HANDOVER STATUS
                                 </th>
                             </tr>
-
-                            {/* Row 2: Sub-column headers */}
                             <tr>
                                 {ALL_SECTIONS.map(sec =>
                                     SECTION_SUB_COLS[sec].map(sub => (
                                         <th key={`${sec}_${sub}`}
                                             style={{
                                                 ...css.th,
-                                                minWidth: 100,
+                                                minWidth:   100,
                                                 background: sectionColors[sec].bg,
-                                                color: sectionColors[sec].text,
-                                                fontSize: 10,
+                                                color:      sectionColors[sec].text,
+                                                fontSize:   10,
                                                 fontWeight: 700,
-                                                textAlign: "center",
+                                                textAlign:  "center",
                                                 whiteSpace: "normal",
                                                 lineHeight: 1.2,
-                                                padding: "6px 6px",
+                                                padding:    "6px 6px",
                                             }}>
                                             {sub}
                                         </th>
@@ -3404,11 +4478,15 @@ export default function TrackerFormPage() {
                                 <tr key={row._id} className="tr-row"
                                     style={{ background: idx % 2 === 0 ? "#fff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
 
-                                    {/* Left auto/editable cols */}
                                     {LEFT_COLS.map(col => (
                                         <td key={col.key} style={css.td}>
                                             {col.auto ? (
-                                                <div style={css.autoCell}>
+                                                <div style={{
+                                                    ...css.autoCell,
+                                                    ...(col.key === "sqft" && row.length && row.height
+                                                        ? { background: "#eff6ff", color: "#0284c7", borderColor: "#bfdbfe", fontWeight: 700 }
+                                                        : {})
+                                                }}>
                                                     {col.key === "sqft" && row[col.key]
                                                         ? parseFloat(row[col.key]).toFixed(2)
                                                         : row[col.key] || "—"}
@@ -3418,25 +4496,28 @@ export default function TrackerFormPage() {
                                                     className="tr-cell"
                                                     style={{ ...css.cell, width: col.w - 16 }}
                                                     value={row[col.key]}
+                                                    type={col.key === "length" || col.key === "height" ? "number" : "text"}
                                                     onChange={e => updateRow(row._id, col.key, e.target.value)}
-                                                    placeholder={col.key === "jobCard" ? "e.g. 208-01" : ""}
+                                                    placeholder={col.key === "jobCard" ? "e.g. 208-01" : "mm"}
                                                 />
                                             )}
                                         </td>
                                     ))}
 
-                                    {/* Section sub-cols */}
                                     {ALL_SECTIONS.map(sec =>
                                         SECTION_SUB_COLS[sec].map(sub => {
                                             const fkey      = `${sec}__${sub}`;
                                             const isStatus  = sec === "STATUS";
-                                            // SUPPLY/INSTALL cells driven by STATUS are auto (read-only)
-                                            const statusKey = `STATUS__${sub}`;
-                                            const statusVal = row[statusKey]?.trim().toLowerCase();
-                                            // R → SUPPLY auto-driven | I → BOTH SUPPLY and INSTALLATION auto-driven
-                                            const isAutoSupply  = sec === "SUPPLY"       && STATUS_SUB_COLS.includes(sub) && (statusVal === "r" || statusVal === "i");
-                                            const isAutoInstall = sec === "INSTALLATION" && STATUS_SUB_COLS.includes(sub) && statusVal === "i";
-                                            const isAutoDriven  = isAutoSupply || isAutoInstall;
+                                            const statusVal = row[`STATUS__${sub}`]?.trim().toLowerCase();
+                                            // HARDWARE in HANDOVER: driven by anyH
+                                            const anyH = STATUS_SUB_COLS.some(
+                                                s => row[`STATUS__${s}`]?.trim().toLowerCase() === "h"
+                                            );
+                                            const isAutoDriven =
+                                                (sec === "SUPPLY"       && (statusVal === "r" || statusVal === "i" || statusVal === "h")) ||
+                                                (sec === "INSTALLATION" && (statusVal === "i" || statusVal === "h")) ||
+                                                (sec === "HANDOVER" && sub !== "HARDWARE" && statusVal === "h") ||
+                                                (sec === "HANDOVER" && sub === "HARDWARE" && anyH);
 
                                             return (
                                                 <td key={fkey}
@@ -3445,10 +4526,8 @@ export default function TrackerFormPage() {
                                                         className="tr-cell"
                                                         style={{
                                                             ...css.cell,
-                                                            width: 84,
+                                                            width:     84,
                                                             textAlign: isStatus ? "center" : "right",
-                                                            // STATUS: plain white editable
-                                                            // Auto-driven: blue read-only
                                                             ...(isAutoDriven ? css.cellAutoDriven : {}),
                                                             ...(isStatus ? { fontWeight: 700, textTransform: "uppercase" } : {}),
                                                         }}
@@ -3456,7 +4535,7 @@ export default function TrackerFormPage() {
                                                         value={row[fkey]}
                                                         readOnly={isAutoDriven}
                                                         onChange={e => updateRow(row._id, fkey, e.target.value)}
-                                                        placeholder={isStatus ? "R / I" : "0.00"}
+                                                        placeholder={isStatus ? "R/I/H" : "0.00"}
                                                         maxLength={isStatus ? 1 : undefined}
                                                     />
                                                 </td>
@@ -3464,7 +4543,6 @@ export default function TrackerFormPage() {
                                         })
                                     )}
 
-                                    {/* Handover status */}
                                     <td style={css.td}>
                                         <input
                                             className="tr-cell"
@@ -3487,7 +4565,7 @@ export default function TrackerFormPage() {
                                 <td colSpan={3} />
                                 {ALL_SECTIONS.map(sec =>
                                     SECTION_SUB_COLS[sec].map(sub => {
-                                        const fkey = `${sec}__${sub}`;
+                                        const fkey  = `${sec}__${sub}`;
                                         const total = rows.reduce((s, r) => s + (parseFloat(r[fkey]) || 0), 0);
                                         return (
                                             <td key={fkey}
@@ -3504,15 +4582,14 @@ export default function TrackerFormPage() {
                 </div>
             </div>
 
-            {/* Summary strip */}
             <div style={css.summaryStrip}>
                 {[
                     { label: "Project",    val: selectedProject?.projectName || "—", color: "#1e293b" },
-                    { label: "Work Order", val: selectedWO?.workOrderNo || "—",       color: "#0284c7" },
-                    { label: "Tower",      val: selectedWO?.towerName   || "—",       color: "#d97706" },
-                    { label: "Total Rows", val: rows.length,                          color: "#475569" },
-                    { label: "Total Sqft", val: totalSqft.toFixed(2),                color: "#0284c7" },
-                    { label: "DB Status",  val: sheetId ? "Saved" : "Not saved",      color: sheetId ? "#16a34a" : "#94a3b8" },
+                    { label: "Work Order", val: selectedWO?.workOrderNo      || "—", color: "#0284c7" },
+                    { label: "Tower",      val: selectedWO?.towerName        || "—", color: "#d97706" },
+                    { label: "Total Rows", val: rows.length,                         color: "#475569" },
+                    { label: "Total Sqft", val: totalSqft.toFixed(2),               color: "#0284c7" },
+                    { label: "DB Status",  val: sheetId ? "Saved" : "Not saved",     color: sheetId ? "#16a34a" : "#94a3b8" },
                 ].map(s => (
                     <div key={s.label} style={css.summaryItem}>
                         <span style={css.summaryLabel}>{s.label}</span>
@@ -3524,7 +4601,6 @@ export default function TrackerFormPage() {
     );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const css = {
     page:            { maxWidth: 1600, margin: "0 auto", padding: "0 4px 56px", fontFamily: "'Inter',-apple-system,sans-serif" },
     pageHeader:      { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, padding: "28px 0 20px", flexWrap: "wrap" },

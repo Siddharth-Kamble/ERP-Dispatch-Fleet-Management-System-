@@ -313,6 +313,7 @@ import WorkOrderFormPage from "./Module/Coordinator/Pages/WorkOrderFormPage";
 import TrackerPage from "./Module/Coordinator/Pages/TrackerPage";
 import InfoSheetFormPage from "./Module/Coordinator/Pages/InfoSheetFormPage";
 import TrackerFormPage from "./Module/Coordinator/Pages/TrackerFormPage";
+import TrackerSummaryPage from "./Module/Coordinator/Pages/TrackerSummaryPage";
 
 // Admin & VP & Driver
 import AdminDashboard from "./pages/AdminDashboard";
@@ -439,6 +440,7 @@ function App() {
                     <Route path="tracker/:workOrderId/sheets/create"            element={<InfoSheetFormPage />} />
                     <Route path="tracker/:workOrderId/sheets/:id/edit"          element={<InfoSheetFormPage />} />
                     <Route path="production-tracker" element={<TrackerFormPage />} />
+                    <Route path="tracker-summary" element={<TrackerSummaryPage />} />
                 </Route>
 
                 {/* Vehicle Requisition standalone */}

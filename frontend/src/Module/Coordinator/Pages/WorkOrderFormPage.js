@@ -10,7 +10,7 @@ import {
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import * as PDFJS from "pdfjs-dist";
 //import XLSX from "xlsx-js-style;
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -162,196 +162,307 @@ const makeCols = (woQtyUnit) => [
 // Rows 4+: Data — alternating white / #F2F2F2, thin gray borders, numbers right-aligned
 // Last  : Total — #D9D9D9 bg, bold, top medium border
 // ── Excel export ──────────────────────────────────────────────────────────────
-function exportExcel(rows, projectName, towerName, workOrderNo, date, woQtyUnit) {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet([]);
-    const COLS = 13;
-    const colLetters = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
+ function exportExcel(rows, projectName, towerName, workOrderNo, date, woQtyUnit) {
+     const wb = XLSX.utils.book_new();
+     const ws = XLSX.utils.json_to_sheet([]);
+     const COLS = 13;
+     const colLetters = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
 
-    // ── Totals ────────────────────────────────────────────────────────────────
-    const totalSqft    = rows.reduce((s,r) => s + (parseFloat(r.sqft)              || 0), 0);
-    const totalWoSqmtr = rows.reduce((s,r) => s + (parseFloat(r.woQtySqftRaw)      || 0), 0);
-    const totalWoSqft  = rows.reduce((s,r) => s + (parseFloat(r.woQtySqft)         || 0), 0);
-    const totalNos     = rows.reduce((s,r) => s + (parseInt(r.woQtyNos)            || 0), 0);
-    const totalQtyFP   = rows.reduce((s,r) => s + (parseFloat(r.qtyAsPerFloorPlan) || 0), 0);
-    const totalDiff    = rows.reduce((s,r) => s + (parseFloat(r.difference)        || 0), 0);
+     // ── Totals ────────────────────────────────────────────────────────────────
+     const totalSqft    = rows.reduce((s,r) => s + (parseFloat(r.sqft)              || 0), 0);
+     const totalWoSqmtr = rows.reduce((s,r) => s + (parseFloat(r.woQtySqftRaw)      || 0), 0);
+     const totalWoSqft  = rows.reduce((s,r) => s + (parseFloat(r.woQtySqft)         || 0), 0);
+     const totalNos     = rows.reduce((s,r) => s + (parseInt(r.woQtyNos)            || 0), 0);
+     const totalQtyFP   = rows.reduce((s,r) => s + (parseFloat(r.qtyAsPerFloorPlan) || 0), 0);
+     const totalDiff    = rows.reduce((s,r) => s + (parseFloat(r.difference)        || 0), 0);
 
-    // ── ROW 1: Project name — light orange bg, black bold centered ────────────
-    XLSX.utils.sheet_add_aoa(ws, [[projectName || "MANJARI HOUSING PROJECTS LLP"]], { origin: "A1" });
+     // ── ROW 1: Project name ───────────────────────────────────────────────────
+     XLSX.utils.sheet_add_aoa(ws, [[projectName || "PROJECT NAME"]], { origin: "A1" });
 
-    // ── ROW 2: WO info left | Tower right ─────────────────────────────────────
-    XLSX.utils.sheet_add_aoa(ws, [[
-        `Work Order No: ${workOrderNo || "—"}     Date: ${date || "—"}     Unit: ${woQtyUnit?.toUpperCase() || "SQFT"}`,
-        "","","","","","","","","","","",
-        towerName || ""
-    ]], { origin: "A2" });
+     // ── ROW 2: WO info left | Tower right ─────────────────────────────────────
+     XLSX.utils.sheet_add_aoa(ws, [[
+         `Work Order No: ${workOrderNo || "—"}     Date: ${date || "—"}     Unit: ${woQtyUnit?.toUpperCase() || "SQFT"}`,
+         "","","","","","","","","","","",
+         towerName || ""
+     ]], { origin: "A2" });
 
-    // ── ROW 3: Column headers ─────────────────────────────────────────────────
-    XLSX.utils.sheet_add_aoa(ws, [[
-        "Sr No","Location","Wcode","Typology","Series",
-        "Length","Height","Sqft",
-        "W/O Qty\nin Sqmtr","W/O in\nSqft","Qty in\nNos",
-        "Qty As per\nFloor plan","Difference"
-    ]], { origin: "A3" });
+     // ── ROW 3: Column headers ─────────────────────────────────────────────────
+     XLSX.utils.sheet_add_aoa(ws, [[
+         "Sr No","Location","Wcode","Typology","Series",
+         "Length","Height","Sqft",
+         "W/O Qty\nin Sqmtr","W/O in\nSqft","Qty in\nNos",
+         "Qty As per\nFloor plan","Difference"
+     ]], { origin: "A3" });
 
-    // ── DATA ROWS ─────────────────────────────────────────────────────────────
-    const dataRows = rows.map((r, i) => [
-        r.srNo || (i + 1),
-        r.location          || "",
-        r.windowCode        || "",
-        r.typology          || "",
-        r.series            || "",
-        r.length            !== "" ? Number(r.length)                                   : "",
-        r.height            !== "" ? Number(r.height)                                   : "",
-        r.sqft              !== "" ? parseFloat(parseFloat(r.sqft).toFixed(2))          : "",
-        r.woQtySqftRaw      !== "" ? parseFloat(parseFloat(r.woQtySqftRaw).toFixed(2)) : "",
-        r.woQtySqft         !== "" ? parseFloat(parseFloat(r.woQtySqft).toFixed(2))    : "",
-        r.woQtyNos          !== "" ? parseInt(r.woQtyNos)                              : "",
-        r.qtyAsPerFloorPlan !== "" ? parseFloat(r.qtyAsPerFloorPlan)                  : "",
-        r.difference        !== "" ? parseFloat(r.difference)                         : "",
-    ]);
-    XLSX.utils.sheet_add_aoa(ws, dataRows, { origin: "A4" });
+     // ── DATA ROWS ─────────────────────────────────────────────────────────────
+     const dataRows = rows.map((r, i) => [
+         r.srNo || (i + 1),
+         r.location          || "",
+         r.windowCode        || "",
+         r.typology          || "",
+         r.series            || "",
+         r.length            !== "" ? Number(r.length)                                   : "",
+         r.height            !== "" ? Number(r.height)                                   : "",
+         r.sqft              !== "" ? parseFloat(parseFloat(r.sqft).toFixed(2))          : "",
+         r.woQtySqftRaw      !== "" ? parseFloat(parseFloat(r.woQtySqftRaw).toFixed(2)) : "",
+         r.woQtySqft         !== "" ? parseFloat(parseFloat(r.woQtySqft).toFixed(2))    : "",
+         r.woQtyNos          !== "" ? parseInt(r.woQtyNos)                               : "",
+         r.qtyAsPerFloorPlan !== "" ? parseFloat(r.qtyAsPerFloorPlan)                   : "",
+         r.difference        !== "" ? parseFloat(r.difference)                          : "",
+     ]);
+     XLSX.utils.sheet_add_aoa(ws, dataRows, { origin: "A4" });
 
-    // ── Total row ─────────────────────────────────────────────────────────────
-    const totalR = 4 + rows.length;
-    XLSX.utils.sheet_add_aoa(ws, [[
-        "Total","","","","","","",
-        parseFloat(totalSqft.toFixed(2)),
-        parseFloat(totalWoSqmtr.toFixed(2)),
-        parseFloat(totalWoSqft.toFixed(2)),
-        totalNos,
-        parseFloat(totalQtyFP.toFixed(2)),
-        parseFloat(totalDiff.toFixed(2)),
-    ]], { origin: `A${totalR}` });
+     // ── Total row ─────────────────────────────────────────────────────────────
+     const totalR = 4 + rows.length;
+     XLSX.utils.sheet_add_aoa(ws, [[
+         "Total","","","","","","",
+         parseFloat(totalSqft.toFixed(2)),
+         parseFloat(totalWoSqmtr.toFixed(2)),
+         parseFloat(totalWoSqft.toFixed(2)),
+         totalNos,
+         parseFloat(totalQtyFP.toFixed(2)),
+         parseFloat(totalDiff.toFixed(2)),
+     ]], { origin: `A${totalR}` });
 
-    // ── Merges ────────────────────────────────────────────────────────────────
-    ws["!merges"] = [
-        { s:{r:0,c:0},        e:{r:0,c:COLS-1}   },  // Row1 project name full width
-        { s:{r:1,c:0},        e:{r:1,c:11}        },  // Row2 WO info A–L
-        { s:{r:totalR-1,c:0}, e:{r:totalR-1,c:6}  },  // Total label A:G
-    ];
+     // ── Merges ────────────────────────────────────────────────────────────────
+     ws["!merges"] = [
+         { s:{r:0,c:0},        e:{r:0,c:COLS-1}  },
+         { s:{r:1,c:0},        e:{r:1,c:11}       },
+         { s:{r:totalR-1,c:0}, e:{r:totalR-1,c:6} },
+     ];
 
-    // ── Column widths ─────────────────────────────────────────────────────────
-    ws["!cols"] = [
-        {wch:7},{wch:24},{wch:10},{wch:44},{wch:9},
-        {wch:9},{wch:9},{wch:11},{wch:14},{wch:13},
-        {wch:10},{wch:18},{wch:13},
-    ];
+     // ── Column widths ─────────────────────────────────────────────────────────
+     ws["!cols"] = [
+         {wch:7},{wch:24},{wch:10},{wch:44},{wch:9},
+         {wch:9},{wch:9},{wch:11},{wch:14},{wch:13},
+         {wch:10},{wch:18},{wch:13},
+     ];
 
-    // ── Row heights ───────────────────────────────────────────────────────────
-    ws["!rows"] = [
-        {hpt:28}, // Row1 project name
-        {hpt:18}, // Row2 WO info
-        {hpt:36}, // Row3 headers
-    ];
+     // ── Row heights ───────────────────────────────────────────────────────────
+     ws["!rows"] = [
+         {hpt:30}, // Row1 — project name
+         {hpt:17}, // Row2 — WO info
+         {hpt:38}, // Row3 — headers (taller for wrapped text)
+     ];
 
-    // ── Border helpers ────────────────────────────────────────────────────────
-    const thinGray   = { style:"thin",   color:{rgb:"BFBFBF"} };
-    const thinNavy   = { style:"thin",   color:{rgb:"1F3864"} };
-    const thinSky    = { style:"thin",   color:{rgb:"87CEEB"} };
-    const medGray    = { style:"medium", color:{rgb:"595959"} };
-    const bdr = (t,b,l,r) => ({ top:t, bottom:b, left:l, right:r });
+     // ── Colour palette — all soft/pastel, nothing jarring ─────────────────────
+     // Row 1 title:      warm sand          #FFF3E0  text: deep amber  #7B4F12
+     // Row 2 meta:       pure white         #FFFFFF  text: mid gray    #6B6B6B
+     // Row 2 tower cell: soft lavender      #EDE7F6  text: indigo      #4A148C
+     // Row 3 headers:    soft sky blue      #E3F2FD  text: dark navy   #1A237E
+     //   — dimension cols (L/H/Sqft):       #E8F5E9  text: dark green  #1B5E20
+     //   — W/O qty cols:                    #FFF8E1  text: deep amber  #7B4F12
+     //   — Nos / floor plan / diff:         #F3E5F5  text: deep purple #4A148C
+     // Data even rows:   pure white         #FFFFFF
+     // Data odd rows:    very light gray    #FAFAFA
+     //   — col tints per group kept subtle: +4% tint per section
+     // Total row:        soft sage green    #E8F5E9  text: dark green  #1B5E20
 
-    // IMPORTANT: SheetJS needs ws[ref] to exist before setting .s
-    // We set both value type and style together
-    const applyStyle = (ref, style) => {
-        if (!ws[ref]) ws[ref] = { t:"z", v:"" };
-        ws[ref].s = style;
-    };
+     const P = {
+         // title band
+         titleBg:   "FFF3E0", titleFg:   "7B4F12",
+         // meta row
+         metaBg:    "FFFFFF", metaFg:    "6B6B6B",
+         towerBg:   "EDE7F6", towerFg:   "4A148C",
+         // header groups
+         hdrBase:   "E3F2FD", hdrBaseFg: "1A237E",   // A–E  : ID / text cols
+         hdrDim:    "E8F5E9", hdrDimFg:  "1B5E20",   // F–H  : Length / Height / Sqft
+         hdrWo:     "FFF8E1", hdrWoFg:   "7B4F12",   // I–J  : W/O qty cols
+         hdrNos:    "F3E5F5", hdrNosFg:  "4A148C",   // K–M  : Nos / FP / Diff
+         // data tints (very subtle — only noticeable on close look)
+         dataDim:   "F9FDFA", // F–H even rows
+         dataWo:    "FFFEF8", // I–J even rows
+         dataNos:   "FCF8FE", // K–M even rows
+         // odd row base
+         oddBase:   "F7F9FB",
+         // total row
+         totalBg:   "E8F5E9", totalFg:   "1B5E20",
+         totalDiff: "FFF9F0",
+         // borders
+         borderHdr: "90CAF9", // header borders — soft blue
+         borderRow: "E0E0E0", // data row borders — very light gray
+         borderTot: "A5D6A7", // total row borders — soft green
+     };
 
-    // ── ROW 1: Light orange bg, black bold, centered ──────────────────────────
-    // Light orange: #FFE0B2
-    applyStyle("A1", {
-        font:      { bold:true, sz:14, name:"Calibri", color:{rgb:"7B3F00"} },
-        alignment: { horizontal:"center", vertical:"center" },
-        fill:      { patternType:"solid", fgColor:{rgb:"FFE0B2"} },
-        border:    bdr(thinNavy, thinNavy, thinNavy, thinNavy),
-    });
+     // ── Border factories ──────────────────────────────────────────────────────
+     const b  = (rgb, style = "thin") => ({ style, color: { rgb } });
+     const bAll = (rgb, style = "thin") => ({ top:b(rgb,style), bottom:b(rgb,style), left:b(rgb,style), right:b(rgb,style) });
+     const bTop = (rgb, style = "medium") => ({ top:b(rgb,style), bottom:b(P.borderRow), left:b(P.borderRow), right:b(P.borderRow) });
 
-    // ── ROW 2: WO info — white bg, gray italic ────────────────────────────────
-    applyStyle("A2", {
-        font:      { sz:9, name:"Calibri", color:{rgb:"595959"}, italic:true },
-        alignment: { vertical:"center", wrapText:false },
-        fill:      { patternType:"solid", fgColor:{rgb:"FFFFFF"} },
-        border:    bdr(thinGray, thinGray, thinGray, thinGray),
-    });
-    ["B2","C2","D2","E2","F2","G2","H2","I2","J2","K2","L2"].forEach(ref => applyStyle(ref, {
-        fill:   { patternType:"solid", fgColor:{rgb:"FFFFFF"} },
-        border: bdr(thinGray, thinGray, thinGray, thinGray),
-    }));
+     // ── Apply style helper ────────────────────────────────────────────────────
+     const applyStyle = (ref, style) => {
+         if (!ws[ref]) ws[ref] = { t:"z", v:"" };
+         ws[ref].s = style;
+     };
 
-    // ── ROW 2: Tower name M2 — light blue tint, navy bold ────────────────────
-    applyStyle("M2", {
-        font:      { bold:true, sz:10, name:"Calibri", color:{rgb:"1F3864"} },
-        alignment: { horizontal:"right", vertical:"center" },
-        fill:      { patternType:"solid", fgColor:{rgb:"DEEAF1"} },
-        border:    bdr(thinGray, thinGray, thinGray, thinGray),
-    });
+     // ─────────────────────────────────────────────────────────────────────────
+     // ROW 1 — Project title
+     // Warm sand background, deep amber text, bold 14pt, centered
+     // Left edge: medium amber accent line (achieved via left border style medium)
+     // ─────────────────────────────────────────────────────────────────────────
+     applyStyle("A1", {
+         font:      { bold:true, sz:14, name:"Calibri", color:{ rgb:P.titleFg } },
+         alignment: { horizontal:"center", vertical:"center" },
+         fill:      { patternType:"solid", fgColor:{ rgb:P.titleBg } },
+         border: {
+             top:    b("F0C070","medium"),
+             bottom: b("E8B040","medium"),
+             left:   b("D4880A","medium"),
+             right:  b("F0C070","medium"),
+         },
+     });
+     // Fill merged cells of row 1 (B1–M1) with same bg so merged cell looks solid
+     ["B","C","D","E","F","G","H","I","J","K","L","M"].forEach(col => {
+         applyStyle(`${col}1`, {
+             fill:   { patternType:"solid", fgColor:{ rgb:P.titleBg } },
+             border: bAll("F0C070"),
+         });
+     });
 
-    // ── ROW 3: Column headers — VERY LIGHT SKY BLUE bg, BLACK bold ───────────
-    // Sky blue: #E0F4FF  (very light)
-    colLetters.forEach(col => {
-        applyStyle(`${col}3`, {
-            font:      { bold:true, sz:9, name:"Calibri", color:{rgb:"000000"} },
-            alignment: { horizontal:"center", vertical:"center", wrapText:true },
-            fill:      { patternType:"solid", fgColor:{rgb:"E0F4FF"} },
-            border:    bdr(thinSky, thinSky, thinSky, thinSky),
-        });
-    });
+     // ─────────────────────────────────────────────────────────────────────────
+     // ROW 2 — WO info meta (A2–L2 merged) + Tower (M2)
+     // ─────────────────────────────────────────────────────────────────────────
+     applyStyle("A2", {
+         font:      { sz:9, name:"Calibri", color:{ rgb:P.metaFg }, italic:true },
+         alignment: { vertical:"center" },
+         fill:      { patternType:"solid", fgColor:{ rgb:P.metaBg } },
+         border:    bAll(P.borderRow),
+     });
+     ["B","C","D","E","F","G","H","I","J","K","L"].forEach(col => {
+         applyStyle(`${col}2`, {
+             fill:   { patternType:"solid", fgColor:{ rgb:P.metaBg } },
+             border: bAll(P.borderRow),
+         });
+     });
+     // Tower cell M2 — soft lavender, indigo text, right-aligned
+     applyStyle("M2", {
+         font:      { bold:true, sz:10, name:"Calibri", color:{ rgb:P.towerFg } },
+         alignment: { horizontal:"center", vertical:"center" },
+         fill:      { patternType:"solid", fgColor:{ rgb:P.towerBg } },
+         border: {
+             top:    b("CE93D8","thin"),
+             bottom: b("CE93D8","thin"),
+             left:   b("CE93D8","medium"),
+             right:  b("CE93D8","thin"),
+         },
+     });
 
-    // ── DATA ROWS: white / very light gray alternating ────────────────────────
-    dataRows.forEach((row, ri) => {
-        const excelR = ri + 4;
-        const bg     = ri % 2 === 0 ? "FFFFFF" : "F5F5F5";
-        colLetters.forEach((col, ci) => {
-            const isNum   = ci >= 5;
-            const isDiff  = ci === 12;
-            const diffVal = isDiff ? parseFloat(row[ci]) : NaN;
+     // ─────────────────────────────────────────────────────────────────────────
+     // ROW 3 — Column headers (grouped colour coding)
+     // A–E  : identity/text  — soft sky blue
+     // F–H  : dimensions     — soft mint green
+     // I–J  : W/O qty        — soft warm yellow
+     // K–M  : nos/fp/diff    — soft lavender
+     // ─────────────────────────────────────────────────────────────────────────
+     const hdrGroup = (ci) => {
+         if (ci <= 4) return { bg: P.hdrBase, fg: P.hdrBaseFg, bdr: "90CAF9" };
+         if (ci <= 7) return { bg: P.hdrDim,  fg: P.hdrDimFg,  bdr: "80CBC4" };
+         if (ci <= 9) return { bg: P.hdrWo,   fg: P.hdrWoFg,   bdr: "FFD54F" };
+         return              { bg: P.hdrNos,  fg: P.hdrNosFg,  bdr: "CE93D8" };
+     };
 
-            let fontColor = "000000";
-            let fontBold  = false;
-            if (isDiff && !isNaN(diffVal) && diffVal !== 0) {
-                fontBold  = true;
-                fontColor = diffVal < 0 ? "C00000" : "375623";
-            }
+     colLetters.forEach((col, ci) => {
+         const g = hdrGroup(ci);
+         applyStyle(`${col}3`, {
+             font:      { bold:true, sz:9, name:"Calibri", color:{ rgb:g.fg } },
+             alignment: { horizontal:"center", vertical:"center", wrapText:true },
+             fill:      { patternType:"solid", fgColor:{ rgb:g.bg } },
+             border: {
+                 top:    b(g.bdr,"medium"),
+                 bottom: b(g.bdr,"medium"),
+                 left:   b(g.bdr),
+                 right:  b(g.bdr),
+             },
+         });
+     });
 
-            applyStyle(`${col}${excelR}`, {
-                font:      { sz:9, name:"Calibri", bold:fontBold, color:{rgb:fontColor} },
-                alignment: {
-                    horizontal: ci === 0 ? "center" : isNum ? "right" : "left",
-                    vertical:   "center",
-                },
-                fill:   { patternType:"solid", fgColor:{rgb:bg} },
-                border: bdr(thinGray, thinGray, thinGray, thinGray),
-            });
-        });
-    });
+     // ─────────────────────────────────────────────────────────────────────────
+     // DATA ROWS — alternating white / very light gray
+     // Subtle column-group tints on even rows only
+     // Difference col: soft red/green text, bold when non-zero
+     // ─────────────────────────────────────────────────────────────────────────
+     const dataBg = (ci, isOdd) => {
+         if (isOdd) return P.oddBase;       // odd rows: uniform very light gray
+         if (ci <= 4) return "FFFFFF";      // identity cols: pure white
+         if (ci <= 7) return P.dataDim;     // dimension cols: faint mint
+         if (ci <= 9) return P.dataWo;      // W/O qty: faint warm
+         return P.dataNos;                  // nos/fp/diff: faint lavender
+     };
 
-    // ── TOTAL ROW: light yellow bg, black bold ────────────────────────────────
-    colLetters.forEach((col, ci) => {
-        const isTotalDiff = ci === 12;
-        let fontColor = "000000";
-        if (isTotalDiff) {
-            fontColor = totalDiff < 0 ? "C00000" : totalDiff > 0 ? "375623" : "000000";
-        }
-        applyStyle(`${col}${totalR}`, {
-            font:      { bold:true, sz:10, name:"Calibri", color:{rgb:fontColor} },
-            alignment: {
-                horizontal: ci === 0 ? "center" : ci >= 7 ? "right" : "left",
-                vertical:   "center",
-            },
-            fill:   { patternType:"solid", fgColor:{rgb:"FFFF99"} },
-            border: bdr(medGray, thinGray, thinGray, thinGray),
-        });
-    });
+     dataRows.forEach((row, ri) => {
+         const excelR = ri + 4;
+         const isOdd  = ri % 2 === 1;
 
-    // ── Write file ────────────────────────────────────────────────────────────
-    // CRITICAL: xlsx-js-style or SheetJS Pro needed for cell styles.
-    // Using standard sheetjs — styles via !sheetFormat + ws['!style'] where supported.
-    // The applyStyle approach works with xlsx-style / xlsx-js-style packages.
-    XLSX.utils.book_append_sheet(wb, ws, "Work Order");
-    XLSX.writeFile(wb, `WorkOrder_${workOrderNo||"export"}_${towerName||"report"}.xlsx`);
-}
+         colLetters.forEach((col, ci) => {
+             const isNum   = ci >= 5;
+             const isDiff  = ci === 12;
+             const diffVal = isDiff ? parseFloat(row[ci]) : NaN;
+
+             let fontColor = "2D2D2D";   // near-black for all data
+             let fontBold  = false;
+
+             if (isDiff && !isNaN(diffVal) && diffVal !== 0) {
+                 fontBold  = true;
+                 // Soft red vs soft forest green — readable but not garish
+                 fontColor = diffVal < 0 ? "C62828" : "2E7D32";
+             }
+
+             applyStyle(`${col}${excelR}`, {
+                 font: {
+                     sz:    9,
+                     name:  "Calibri",
+                     bold:  fontBold,
+                     color: { rgb: fontColor },
+                 },
+                 alignment: {
+                     horizontal: ci === 0 ? "center" : isNum ? "right" : "left",
+                     vertical:   "center",
+                 },
+                 fill:   { patternType:"solid", fgColor:{ rgb: dataBg(ci, isOdd) } },
+                 border: bAll(P.borderRow),
+             });
+         });
+     });
+
+     // ─────────────────────────────────────────────────────────────────────────
+     // TOTAL ROW — soft sage green bg, dark green text, bold
+     // Difference total gets its own tint cell
+     // ─────────────────────────────────────────────────────────────────────────
+     colLetters.forEach((col, ci) => {
+         const isTotalDiff = ci === 12;
+         let fontColor = P.totalFg;
+         let bgColor   = P.totalBg;
+
+         if (isTotalDiff) {
+             fontColor = totalDiff < 0 ? "C62828" : totalDiff > 0 ? "2E7D32" : P.totalFg;
+             bgColor   = totalDiff < 0 ? "FFEBEE" : totalDiff > 0 ? "E8F5E9" : P.totalBg;
+         }
+
+         applyStyle(`${col}${totalR}`, {
+             font: {
+                 bold:  true,
+                 sz:    10,
+                 name:  "Calibri",
+                 color: { rgb: fontColor },
+             },
+             alignment: {
+                 horizontal: ci === 0 ? "center" : ci >= 7 ? "right" : "left",
+                 vertical:   "center",
+             },
+             fill:   { patternType:"solid", fgColor:{ rgb: bgColor } },
+             border: {
+                 top:    b(P.borderTot, "medium"),
+                 bottom: b(P.borderTot, "medium"),
+                 left:   b(P.borderRow),
+                 right:  b(P.borderRow),
+             },
+         });
+     });
+
+     // ── Write file ────────────────────────────────────────────────────────────
+     XLSX.utils.book_append_sheet(wb, ws, "Work Order");
+     XLSX.writeFile(wb, `WorkOrder_${workOrderNo||"export"}_${towerName||"report"}.xlsx`);
+ }
 
 
 // ── PDF export ────────────────────────────────────────────────────────────────
